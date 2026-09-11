@@ -142,6 +142,27 @@ function showActionModal(title, bodyText, onConfirm) {
 
 // ===== suara =====
 
+// Format nama mixer biar dibaca jelas (ME → "em e", bukan "mi")
+const HURUF_SPOKEN = {
+  'A': 'a', 'B': 'be', 'C': 'ce', 'D': 'de', 'E': 'e',
+  'F': 'ef', 'G': 'ge', 'H': 'ha', 'I': 'i', 'J': 'je',
+  'K': 'ka', 'L': 'el', 'M': 'em', 'N': 'en', 'O': 'o',
+  'P': 'pe', 'Q': 'ki', 'R': 'er', 'S': 'es', 'T': 'te',
+  'U': 'u', 'V': 've', 'W': 'we', 'X': 'eks', 'Y': 'ye', 'Z': 'zet',
+  '0': 'nol', '1': 'satu', '2': 'dua', '3': 'tiga', '4': 'empat',
+  '5': 'lima', '6': 'enam', '7': 'tujuh', '8': 'delapan', '9': 'sembilan',
+};
+
+function formatSpokenMixer(mixerName) {
+  return mixerName
+    .split('')
+    .map((c) => {
+      if (c === ' ') return ' ';
+      return HURUF_SPOKEN[c.toUpperCase()] || c;
+    })
+    .join(' ');
+}
+
 function speakAlert(text) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'id-ID';
@@ -208,7 +229,10 @@ function processNextAlert() {
   const { lineKey, mixerName, alertType } = currentAlert;
 
   const label = alertType === 'sampling' ? 'Sampling' : 'Tuang Mikro';
-  const spokenText = alertType === 'sampling' ? `Sampling, ${mixerName}` : `Tuang mikro, ${mixerName}`;
+  const spokenMixerName = formatSpokenMixer(mixerName);
+  const spokenText = alertType === 'sampling'
+    ? `Sampling, ${spokenMixerName}`
+    : `Tuang mikro, ${spokenMixerName}`;
 
   startSpokenAlert(spokenText);
 
@@ -316,7 +340,8 @@ function showOperatorToast(message) {
 
 function notifyOperatorDone(mixerName, alertType) {
   const label = alertType === 'sampling' ? 'Sampling' : 'Tuang mikro';
-  speakAlert(`${label} mixer ${mixerName} sudah selesai.`);
+  const spokenMixerName = formatSpokenMixer(mixerName);
+  speakAlert(`${label} mixer ${spokenMixerName} sudah selesai.`);
   showOperatorToast(`${label} ${mixerName} sudah selesai dikonfirmasi QC.`);
 }
 
@@ -353,6 +378,17 @@ function subscribeToLine(lineKey) {
   }, (err) => console.error('Gagal dengerin data mixer:', err));
 }
 
+// ===== VALIDASI: cek batch sebelumnya sudah sampling apa belum =====
+function isBatchSudahSampling(key) {
+  const activeId = mixerActiveBatchLog[key];
+  if (!activeId) return true; // tidak ada batch jalan → boleh tuang mikro baru
+
+  const batchLog = batchLogCache[activeId];
+  if (!batchLog) return false; // batch tidak ketemu → anggap belum sampling
+
+  return !!batchLog.jamSampling;
+}
+
 function requestMixerAlert(lineKey, mixerName, alertType) {
   const key = `${lineKey}-${mixerName}`;
   const label = alertType === 'sampling' ? 'Sampling' : 'Tuang Mikro';
@@ -369,6 +405,15 @@ function requestMixerAlert(lineKey, mixerName, alertType) {
     showActionModal(
       'Sampling',
       `${mixerName} belum ada Penuangan Mikro untuk batch ini. Lakukan Penuangan Mikro dulu sebelum Sampling.`
+    );
+    return;
+  }
+
+  // Validasi: Tuang Mikro baru tidak boleh kalau batch sebelumnya belum sampling
+  if (alertType === 'tuang-mikro' && !isBatchSudahSampling(key)) {
+    showActionModal(
+      'Tuang Mikro',
+      `${mixerName} masih ada batch yang belum di-sampling. Lakukan Sampling dulu sebelum Tuang Mikro batch berikutnya.`
     );
     return;
   }
