@@ -3,13 +3,10 @@ const LINES = {
   B: { name: 'Cappucino', short: 'Cappu', mixers: ['MC 01', 'MC 02', 'MC 03', 'MPC 01', 'MPC 02'] },
 };
 
-// Label khusus per mixer (override `short` di header grup)
 const MIXER_LABEL_OVERRIDE = {
   'A-MF': 'Moccafrio',
 };
 
-// Ganti PIN ini sesuka lo. INGET: ini cuma proteksi level tampilan doang,
-// bukan keamanan beneran (kode ini kebaca semua orang yang buka "View Source").
 const SPV_PIN = '1234';
 
 function checkPin() {
@@ -46,7 +43,13 @@ function formatJam(date) {
   return date.toLocaleTimeString('id-ID', { hour12: false, hour: '2-digit', minute: '2-digit' });
 }
 
-// ===== status real-time semua mixer, 2 line sekaligus =====
+// ===== toast =====
+function showSpvToast(message) {
+  document.getElementById('spvToastBody').textContent = message;
+  bootstrap.Toast.getOrCreateInstance(document.getElementById('spvToast'), { delay: 5000 }).show();
+}
+
+// ===== status real-time semua mixer =====
 
 function renderAllMixerGrid() {
   const wrap = document.getElementById('allMixerGrid');
@@ -65,12 +68,16 @@ function renderAllMixerGrid() {
       const col = document.createElement('div');
       col.className = 'col-6 col-md-3 col-lg-2';
       col.innerHTML = `
-        <div class="mixer-card">
-          <div class="mixer-card-link">
-            <div class="mixer-icon-wrap">${iconTpl}</div>
-            <p class="mixer-name">${mixerName}</p>
-            <p class="mixer-batch-label mt-2">Batch</p>
-            <p class="mixer-batch-value" data-mixer="${key}">-</p>
+        <div class="mixer-card-wrap">
+          <span class="mixer-badge" data-mixer-badge="${key}"></span>
+          <div class="mixer-card">
+            <div class="mixer-card-link">
+              <div class="mixer-icon-wrap">${iconTpl}</div>
+              <p class="mixer-name">${mixerName}</p>
+              <p class="mixer-batch-label mt-2">Batch</p>
+              <p class="mixer-batch-value" data-mixer="${key}">-</p>
+              <p class="mixer-note" data-mixer-note="${key}">-</p>
+            </div>
           </div>
         </div>
       `;
@@ -81,24 +88,57 @@ function renderAllMixerGrid() {
 
 function subscribeAllMixers() {
   db.collection('mixers').onSnapshot((snapshot) => {
-    snapshot.docChanges().forEach((change) => {
-      const key = change.doc.id;
-      const data = change.doc.data();
-      const status = data.status || 'idle';
-
-      const badge = document.getElementById(`status-${key}`);
-      if (badge) {
-        badge.textContent = status === 'menunggu' ? 'Menunggu QC' : 'Idle';
-        badge.className = `status-pill ${status === 'menunggu' ? 'status-tidak' : 'status-belum-qc'}`;
-      }
+    snapshot.docs.forEach((doc) => {
+      const key = doc.id;
+      const data = doc.data();
+      const batchNumber = data.batchNumberToday || 1;
+      const qcApproved = data.qcApproved || false;
+      const needsResample = data.needsResample || false;
+      const activeId = data.activeBatchLogId;
 
       const valueEl = document.querySelector(`[data-mixer="${key}"]`);
-      if (valueEl) valueEl.textContent = data.batchNumberToday || '-';
+      if (valueEl) valueEl.textContent = batchNumber;
+
+      let noteText = '-';
+      if (activeId) {
+        const batchLog = allBatchLogCache[activeId];
+        if (batchLog) {
+          const sudahTuang = batchLog.jamTuangMikro;
+          const sudahSampling = batchLog.jamSampling;
+          if (sudahTuang && sudahSampling) {
+            noteText = qcApproved ? 'Tuang ✓ · Sampling ✓ · QC ✓' : 'Tuang ✓ · Sampling ✓';
+          } else if (sudahTuang) {
+            noteText = 'Tuang ✓ · Nunggu Sampling';
+          }
+        }
+      }
+      const noteEl = document.querySelector(`[data-mixer-note="${key}"]`);
+      if (noteEl) {
+        noteEl.textContent = noteText;
+        if (noteText.includes('QC ✓')) noteEl.style.color = '#16a34a';
+        else if (noteText.includes('Sampling ✓')) noteEl.style.color = '#0ea5e9';
+        else if (noteText.includes('Tuang ✓')) noteEl.style.color = '#f59e0b';
+        else noteEl.style.color = '#64748b';
+      }
+
+      const badge = document.querySelector(`[data-mixer-badge="${key}"]`);
+      if (badge) {
+        if (qcApproved) {
+          badge.textContent = '✓';
+          badge.className = 'mixer-badge mixer-badge-ok';
+        } else if (needsResample) {
+          badge.textContent = '✗';
+          badge.className = 'mixer-badge mixer-badge-ulang';
+        } else {
+          badge.textContent = '';
+          badge.className = 'mixer-badge';
+        }
+      }
     });
   }, (err) => console.error('Gagal dengerin status mixer:', err));
 }
 
-// ===== riwayat batch gabungan + filter tanggal / produk / shift =====
+// ===== riwayat batch gabungan =====
 
 const allBatchLogCache = {};
 
@@ -116,12 +156,9 @@ function getMixerOrder(lineKey) {
   return LINES[lineKey] ? LINES[lineKey].mixers : [];
 }
 
-// Cek apakah 1 row lolos filter produk
-// produkFilter nilainya: '' | 'A' | 'A-MF' | 'B'
 function matchProdukFilter(row, produkFilter) {
   if (!produkFilter) return true;
   if (produkFilter === 'A') {
-    // Mocca = line A, tapi MF dikecualikan
     return row.line === 'A' && row.mixerName !== 'MF';
   }
   if (produkFilter === 'A-MF') {
@@ -133,13 +170,11 @@ function matchProdukFilter(row, produkFilter) {
   return true;
 }
 
-// Cek apakah 1 row lolos filter shift
 function matchShiftFilter(row, shiftFilter) {
   if (!shiftFilter) return true;
   return String(row.shift || '') === String(shiftFilter);
 }
 
-// Ambil semua row yang lolos semua filter
 function getFilteredRows() {
   const selectedDate = document.getElementById('dateFilter').value;
   const produkFilter = document.getElementById('produkFilter').value;
@@ -157,7 +192,6 @@ function renderSpvRekap() {
 
   const filtered = getFilteredRows();
 
-  // Tentukan line mana aja yang perlu ditampilkan (biar grup kosong gak muncul kalau gak relevan)
   const linesToShow = produkFilter === 'A-MF'
     ? [{ lineKey: 'A', mixerOnly: 'MF' }]
     : produkFilter === 'A'
@@ -188,18 +222,17 @@ function renderSpvRekap() {
         .filter((r) => r.line === lineKey && r.mixerName === mixerName)
         .sort(sortByBatchNumber);
 
-      // Header grup — pakai override kalau ada
       const label = MIXER_LABEL_OVERRIDE[`${lineKey}-${mixerName}`] || lineInfo.short;
       html.push(`
         <tr class="group-header">
-          <td colspan="7">${label} · ${mixerName}</td>
+          <td colspan="10">${label} · ${mixerName}</td>
         </tr>
       `);
 
       if (groupRows.length === 0) {
         html.push(`
           <tr>
-            <td colspan="7" class="text-center empty-note">Belum ada batch</td>
+            <td colspan="10" class="text-center empty-note">Belum ada batch</td>
           </tr>
         `);
         return;
@@ -215,7 +248,10 @@ function renderSpvRekap() {
             <td>${r.shift ? 'Shift ' + r.shift : '-'}</td>
             <td>${r.jamTuangMikro || '-'}</td>
             <td>${r.jamSampling || '-'}</td>
+            <td>${r.jamQcOk || '-'}</td>
+            <td>${r.jamDiscard || '-'}</td>
             <td>${r.batchNumber}</td>
+            <td><button type="button" class="btn-edit" onclick="openEditBatchModal('${r._id}')">✏️ Edit</button></td>
           </tr>
         `);
       });
@@ -223,7 +259,7 @@ function renderSpvRekap() {
   });
 
   if (totalRowsRendered === 0 && html.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center empty-note">Belum ada data buat filter ini</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center empty-note">Belum ada data buat filter ini</td></tr>';
     return;
   }
 
@@ -240,6 +276,7 @@ function subscribeAllBatchLog() {
       const data = change.doc.data();
       allBatchLogCache[change.doc.id] = {
         ...data,
+        _id: change.doc.id,
         createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
       };
     });
@@ -252,11 +289,10 @@ function downloadSpvSpreadsheet() {
   const filtered = getFilteredRows();
 
   if (filtered.length === 0) {
-    alert('Belum ada data buat filter ini.');
+    showSpvToast('Belum ada data untuk filter ini.');
     return;
   }
 
-  // Susun urut: Line -> Mixer -> Batch (flat, tanpa header grup)
   const rows = [];
   Object.keys(LINES).forEach((lineKey) => {
     const lineInfo = LINES[lineKey];
@@ -272,27 +308,85 @@ function downloadSpvSpreadsheet() {
             r.shift ? 'Shift ' + r.shift : '-',
             r.jamTuangMikro || '-',
             r.jamSampling || '-',
+            r.jamQcOk || '-',
+            r.jamDiscard || '-',
             r.batchNumber,
           ]);
         });
     });
   });
 
-  const header = ['Produk', 'Mixer', 'Tanggal', 'Shift', 'Jam Tuang Mikro', 'Jam Sampling', 'Batch'];
+  const header = ['Produk', 'Mixer', 'Tanggal', 'Shift', 'Jam Tuang Mikro', 'Jam Sampling', 'Jam QC OK', 'Jam Discharge', 'Batch'];
   const aoa = [header, ...rows];
 
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
   worksheet['!cols'] = [
-    { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 8 },
+    { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 8 },
   ];
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap SPV');
 
-  const produkVal = document.getElementById('produkFilter').value || 'semua';
-  const shiftVal = document.getElementById('shiftFilter').value || 'semua';
-  XLSX.writeFile(workbook, `rekap-spv-${selectedDate || 'semua-tanggal'}-${produkVal}-${shiftVal}.xlsx`);
+const tanggalFormatted = selectedDate
+  ? new Date(selectedDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  : 'semua tanggal';
+XLSX.writeFile(workbook, `Data Riwayat Batch - ${tanggalFormatted}.xlsx`);
 }
+
+// ===== EDIT BATCH =====
+
+let editBatchTargetId = null;
+
+function openEditBatchModal(batchLogId) {
+  const batchLog = allBatchLogCache[batchLogId];
+  if (!batchLog) {
+    showSpvToast('Data batch tidak ditemukan.');
+    return;
+  }
+
+  editBatchTargetId = batchLogId;
+
+  document.getElementById('editBatchTitle').textContent = `${batchLog.mixerName} · Batch ${batchLog.batchNumber}`;
+  document.getElementById('editTanggal').value = batchLog.tanggal || '';
+  document.getElementById('editShift').value = batchLog.shift || '1';
+  document.getElementById('editJamTuang').value = batchLog.jamTuangMikro || '';
+  document.getElementById('editJamSampling').value = batchLog.jamSampling || '';
+  document.getElementById('editJamQcOk').value = batchLog.jamQcOk || '';
+  document.getElementById('editJamDiscard').value = batchLog.jamDiscard || '';
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('editBatchModal')).show();
+}
+
+function confirmEditBatch() {
+  if (!editBatchTargetId) return;
+
+  const confirmed = confirm('Yakin simpan perubahan ini?');
+  if (!confirmed) return;
+
+  const newTanggal = document.getElementById('editTanggal').value.trim();
+  const newShift = document.getElementById('editShift').value;
+  const newJamTuang = document.getElementById('editJamTuang').value.trim();
+  const newJamSampling = document.getElementById('editJamSampling').value.trim();
+  const newJamQcOk = document.getElementById('editJamQcOk').value.trim();
+  const newJamDiscard = document.getElementById('editJamDiscard').value.trim();
+
+  db.collection('batchLog').doc(editBatchTargetId).update({
+    tanggal: newTanggal || null,
+    shift: newShift || null,
+    jamTuangMikro: newJamTuang || null,
+    jamSampling: newJamSampling || null,
+    jamQcOk: newJamQcOk || null,
+    jamDiscard: newJamDiscard || null,
+  }).then(() => {
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('editBatchModal')).hide();
+    showSpvToast('✅ Perubahan berhasil disimpan.');
+  }).catch((err) => {
+    console.error('Gagal edit batch:', err);
+    showSpvToast('❌ Gagal simpan. Coba lagi.');
+  });
+}
+
+// ===== init =====
 
 function initSpvPage() {
   const dateInput = document.getElementById('dateFilter');

@@ -21,7 +21,16 @@
     </div>
   </div>
 </div>
-
+<div id="operatorPinOverlay" class="role-overlay d-none">
+  <div class="role-box">
+    <h2 class="role-title">Masukin Sandi</h2>
+    <p class="role-subtitle mb-3">Sandi dibutuhkan untuk role Operator.</p>
+    <input type="password" id="operatorPinInput" class="form-control form-control-sm field-dark mb-2" placeholder="Sandi" inputmode="numeric">
+    <button type="button" class="btn-role w-100" onclick="checkOperatorPin()">Masuk</button>
+    <button type="button" class="btn-role w-100 mt-2" onclick="cancelOperatorPin()">Batal</button>
+    <p id="operatorPinError" class="form-error mt-2 d-none">Sandi salah, coba lagi.</p>
+  </div>
+</div>
 <!-- ===== TAMBAHAN: SHIFT ===== -->
 <!-- Overlay pilih shift, muncul setelah role dipilih -->
 <div id="shiftOverlay" class="role-overlay d-none">
@@ -81,6 +90,8 @@
                   <th>Tanggal</th>
                   <th>Jam Sampling</th>
                   <th>Jam Tuang Mikro</th>
+                  <th>Jam QC OK</th>
+                  <th>Jam Discharge</th>
                   <th>Batch</th>
                   <!-- ===== TAMBAHAN: SHIFT ===== -->
                   <th>Shift</th>

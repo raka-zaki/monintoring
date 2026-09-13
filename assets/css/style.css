@@ -506,3 +506,120 @@ body::before {
   min-height: 1rem;
   letter-spacing: 0.02em;
 }
+.mixer-card-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.mixer-card-wrap .mixer-card {
+  flex: 1;
+}
+
+.mixer-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.mixer-badge-ok {
+  background: #16a34a;
+  color: #fff;
+}
+
+.mixer-badge-ulang {
+  background: #dc2626;
+  color: #fff;
+}
+
+.btn-discard {
+  background: #7f1d1d;
+  color: #fecaca;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  margin-top: 0.4rem;
+  width: 100%;
+}
+
+.btn-discard:hover {
+  background: #991b1b;
+  color: #fff;
+}
+/* Tombol OK di Lab QC */
+.btn-ok {
+  background: #16a34a;
+  color: #fff;
+}
+.btn-ok:hover {
+  background: #15803d;
+}
+
+/* Tombol Ulang di Lab QC */
+.btn-ulang {
+  background: #dc2626;
+  color: #fff;
+}
+.btn-ulang:hover {
+  background: #b91c1c;
+}
+.btn-edit {
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  white-space: nowrap;
+}
+.btn-edit:hover {
+  background: #d97706;
+}
+/* Checkbox di card QC */
+.mixer-checkbox {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  z-index: 20;
+  cursor: pointer;
+  accent-color: #16a34a;
+}
+
+/* Toolbar bulk */
+#selectedCount {
+  font-weight: 600;
+  color: #f59e0b;
+  font-size: 0.85rem;
+}
+
+.btn-info-turun {
+  background: #0ea5e9;
+  color: #fff;
+}
+.btn-info-turun:hover {
+  background: #0284c7;
+}
+.btn-info-turun-sent {
+  background: #16a34a;
+}
+.btn-info-turun-sent:hover {
+  background: #15803d;
+}
