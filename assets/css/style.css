@@ -31,6 +31,7 @@ body::before {
   z-index: -1;
 }
 
+/* ===== HALAMAN AWAL ===== */
 .page-wrap {
   min-height: 100vh;
   padding: 2rem 1rem;
@@ -97,22 +98,28 @@ body::before {
   margin: 0;
 }
 
-/* ===== dashboard ===== */
-
+/* ===== DASHBOARD ===== */
 .dash-wrap {
   min-height: 100vh;
   padding: 2rem;
 }
 
 .back-link {
-  color: var(--cream-soft);
-  font-size: 0.85rem;
+  background: transparent;
+  border: 1px solid #8A4A2A;
+  color: #D89A6E;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 8px;
   text-decoration: none;
   white-space: nowrap;
 }
 
 .back-link:hover {
-  color: var(--cream);
+  background: #8A4A2A;
+  color: #FFF8EF;
 }
 
 .clock-badge {
@@ -142,20 +149,6 @@ body::before {
   background: #8A4A2A;
   color: #FFF8EF;
 }
-.back-link:hover {
-  background: #8A4A2A;
-  color: #FFF8EF;
-}
-.back-link {
-  background: transparent;
-  border: 1px solid #8A4A2A;
-  color: #D89A6E;
-  font-family: 'Poppins', sans-serif;
-  font-weight: 600;
-  font-size: 0.8rem;
-  padding: 0.4rem 0.9rem;
-  border-radius: 8px;
-}
 
 .role-badge {
   background: var(--coffee-dark);
@@ -169,6 +162,7 @@ body::before {
   letter-spacing: 0.04em;
 }
 
+/* ===== OVERLAY (PIN, ROLE, SHIFT) ===== */
 .role-overlay {
   position: fixed;
   inset: 0;
@@ -220,6 +214,7 @@ body::before {
   color: #FFF8EF;
 }
 
+/* ===== TOAST ===== */
 .op-toast {
   background: #2E4A3A;
   color: #E7F0E8;
@@ -227,6 +222,7 @@ body::before {
   font-size: 0.85rem;
 }
 
+/* ===== CARD MIXER (lama — SPV/Lab QC) ===== */
 .mixer-card {
   display: flex;
   flex-direction: column;
@@ -263,6 +259,7 @@ body::before {
   font-weight: 600;
   font-family: 'Poppins', sans-serif;
   line-height: 1.1;
+  cursor: pointer;
 }
 
 .btn-sampling {
@@ -283,8 +280,91 @@ body::before {
   background: #B56C1F;
 }
 
-/* ===== popup aksi (modal) ===== */
+/* ===== CARD SELECT (dashboard operator & helper QC) ===== */
+.mixer-card-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
 
+.mixer-card-select {
+  position: relative;
+  background: var(--coffee-mid);
+  border: 2px solid var(--coffee-light);
+  border-radius: 10px;
+  padding: 0.6rem 0.4rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  height: 100%;
+}
+
+.mixer-card-select:hover {
+  background: var(--coffee-light);
+}
+
+.mixer-card-select.selected {
+  background: #1e3a8a;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+.mixer-card-select.selected .mixer-name,
+.mixer-card-select.selected .mixer-batch-value,
+.mixer-card-select.selected .mixer-note {
+  color: #fff;
+}
+
+.mixer-card-select .mixer-icon-wrap {
+  width: 36px;
+  height: 28px;
+  margin: 0 auto 0.3rem;
+  color: var(--cream-soft);
+}
+
+.mixer-card-select.selected .mixer-icon-wrap {
+  color: #fff;
+}
+
+/* ===== GARIS PEMISAH CARD ===== */
+.mixer-divider {
+  width: 80%;
+  height: 1px;
+  background: var(--coffee-light);
+  margin: 0.4rem auto;
+  opacity: 0.4;
+}
+
+/* ===== BADGE CENTANG/SILANG ===== */
+.mixer-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.mixer-badge-ok {
+  background: #16a34a;
+  color: #fff;
+}
+
+.mixer-badge-ulang {
+  background: #dc2626;
+  color: #fff;
+}
+
+/* ===== MODAL ===== */
 .action-modal-content {
   background: var(--coffee-mid);
   border: 1px solid var(--coffee-light);
@@ -302,8 +382,7 @@ body::before {
   font-size: 0.9rem;
 }
 
-/* ===== batch form ===== */
-
+/* ===== FORM ===== */
 .form-label-sm {
   color: var(--cream-soft);
   font-size: 0.72rem;
@@ -328,53 +407,12 @@ body::before {
   color: #8A7A6C;
 }
 
-.chip-add {
-  background: transparent;
-  border: 1px dashed var(--coffee-light);
-  color: var(--cream-soft);
-  font-size: 0.72rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 6px;
-}
-
-.chip-add:hover {
-  border-color: #C97C2A;
-  color: #C97C2A;
-}
-
-.btn-remove-row {
-  background: transparent;
-  border: none;
-  color: #C97C2A;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0 0.4rem;
-}
-
 .form-error {
   color: #E08A6C;
   font-size: 0.8rem;
 }
 
-.saved-item {
-  background: var(--coffee-dark);
-  border: 1px solid var(--coffee-light);
-  border-radius: 8px;
-  padding: 0.75rem 0.9rem;
-}
-
-.saved-batchno {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--cream);
-}
-
-.saved-meta {
-  font-size: 0.75rem;
-  color: var(--cream-soft);
-}
-
+/* ===== STATUS PILL ===== */
 .status-pill {
   font-size: 0.68rem;
   font-weight: 600;
@@ -398,6 +436,7 @@ body::before {
   color: #D8C7A7;
 }
 
+/* ===== MIXER ICON & NAME ===== */
 .mixer-icon-wrap {
   width: 56px;
   height: 42px;
@@ -413,54 +452,66 @@ body::before {
 .mixer-name {
   font-family: 'Poppins', sans-serif;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   color: var(--cream);
   margin: 0;
 }
 
 .mixer-batch-label {
   color: var(--cream-soft);
-  font-size: 0.7rem;
-  margin: 0.5rem 0 0.15rem;
+  font-size: 0.6rem;
+  margin: 0.3rem 0 0.1rem;
 }
 
 .mixer-batch-value {
   color: var(--cream);
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-weight: 500;
   margin: 0;
 }
 
+.mixer-note {
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: #64748b;
+  margin: 3px 0 0 0;
+  min-height: 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+/* ===== PANEL & TABEL ===== */
 .panel-card {
   background: var(--coffee-mid);
   border: 1px solid var(--coffee-light);
   border-radius: 10px;
-  padding: 1.25rem;
+  padding: 1rem;
 }
 
 .panel-title {
   font-family: 'Poppins', sans-serif;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: var(--cream);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .rekap-table {
   color: var(--cream);
-  font-size: 0.85rem;
+  font-size: 0.75rem;
 }
 
 .rekap-table thead th {
   color: var(--cream-soft);
   font-weight: 500;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   border-bottom-color: var(--coffee-light);
+  padding: 0.4rem 0.3rem;
 }
 
 .rekap-table tbody td {
   border-bottom-color: var(--coffee-light);
   vertical-align: middle;
+  padding: 0.4rem 0.3rem;
 }
 
 .empty-note {
@@ -470,7 +521,7 @@ body::before {
 }
 
 .rekap-scroll {
-  max-height: 340px;
+  max-height: 500px;
   overflow-y: auto;
   overflow-x: auto;
 }
@@ -498,51 +549,172 @@ body::before {
   color: var(--coffee-dark);
 }
 
-.mixer-note {
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: #64748b;
-  margin: 4px 0 0 0;
-  min-height: 1rem;
-  letter-spacing: 0.02em;
+/* ===== TOMBOL ACTION (BULK) ===== */
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
-.mixer-card-wrap {
-  position: relative;
+
+.btn-action {
+  flex: 1;
+  min-width: 100px;
+  padding: 0.7rem 0.8rem;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #fff;
+}
+
+.btn-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-action:disabled {
+  cursor: not-allowed;
+}
+
+.btn-action-sampling { background: #0ea5e9; }
+.btn-action-sampling:hover:not(:disabled) { background: #0284c7; }
+
+.btn-action-tuang { background: #f59e0b; }
+.btn-action-tuang:hover:not(:disabled) { background: #d97706; }
+
+.btn-action-discharge { background: #7f1d1d; }
+.btn-action-discharge:hover:not(:disabled) { background: #991b1b; }
+
+.btn-action-info-turun { background: #0ea5e9; }
+.btn-action-info-turun:hover:not(:disabled) { background: #0284c7; }
+
+/* ===== KONFIRMASI HELPER QC ===== */
+.mixer-confirm-area {
+  margin-top: 0.5rem;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  gap: 0.3rem;
 }
 
-.mixer-card-wrap .mixer-card {
-  flex: 1;
+.btn-confirm {
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  width: 100%;
+  cursor: pointer;
 }
 
-.mixer-badge {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  font-size: 1rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  pointer-events: none;
+.btn-confirm:hover {
+  background: #15803d;
 }
 
-.mixer-badge-ok {
+.btn-cancel-confirm {
+  background: #7f1d1d;
+  color: #fecaca;
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  width: 100%;
+  cursor: pointer;
+}
+
+.btn-cancel-confirm:hover {
+  background: #991b1b;
+  color: #fff;
+}
+
+/* ===== TOMBOL LAB QC (OK / ULANG / TERIMA) ===== */
+.btn-ok {
   background: #16a34a;
   color: #fff;
 }
 
-.mixer-badge-ulang {
+.btn-ok:hover {
+  background: #15803d;
+}
+
+.btn-ulang {
   background: #dc2626;
   color: #fff;
 }
 
+.btn-ulang:hover {
+  background: #b91c1c;
+}
+
+.btn-terima {
+  background: #0ea5e9;
+  color: #fff;
+}
+
+.btn-terima:hover {
+  background: #0284c7;
+}
+
+.btn-info-turun {
+  background: #0ea5e9;
+  color: #fff;
+}
+
+.btn-info-turun:hover {
+  background: #0284c7;
+}
+
+.btn-info-turun-sent {
+  background: #16a34a;
+}
+
+.btn-info-turun-sent:hover {
+  background: #15803d;
+}
+
+/* ===== CHECKBOX LAB QC ===== */
+.mixer-checkbox {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  z-index: 20;
+  cursor: pointer;
+  accent-color: #16a34a;
+}
+
+#selectedCount {
+  font-weight: 600;
+  color: #f59e0b;
+  font-size: 0.85rem;
+}
+
+/* ===== TOMBOL EDIT SPV ===== */
+.btn-edit {
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  white-space: nowrap;
+}
+
+.btn-edit:hover {
+  background: #d97706;
+}
+
+/* ===== TOMBOL DISCARD ===== */
 .btn-discard {
   background: #7f1d1d;
   color: #fecaca;
@@ -560,66 +732,238 @@ body::before {
   background: #991b1b;
   color: #fff;
 }
-/* Tombol OK di Lab QC */
-.btn-ok {
-  background: #16a34a;
-  color: #fff;
-}
-.btn-ok:hover {
-  background: #15803d;
-}
 
-/* Tombol Ulang di Lab QC */
-.btn-ulang {
-  background: #dc2626;
-  color: #fff;
-}
-.btn-ulang:hover {
-  background: #b91c1c;
-}
-.btn-edit {
-  background: #f59e0b;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.7rem;
-  font-weight: 600;
+/* ===== TABEL BATCH (per mixer) ===== */
+.batch-mixer-header {
+  background: var(--coffee-dark);
+  color: var(--cream);
   font-family: 'Poppins', sans-serif;
-  white-space: nowrap;
-}
-.btn-edit:hover {
-  background: #d97706;
-}
-/* Checkbox di card QC */
-.mixer-checkbox {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 22px;
-  height: 22px;
-  z-index: 20;
-  cursor: pointer;
-  accent-color: #16a34a;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--coffee-light);
 }
 
-/* Toolbar bulk */
-#selectedCount {
-  font-weight: 600;
-  color: #f59e0b;
+.batch-mixer-data {
+  color: var(--cream-soft);
+  font-size: 0.8rem;
+  padding: 0.5rem 0.8rem 1rem 1.5rem;
+  border-bottom: 1px solid var(--coffee-light);
+}
+
+.batch-mixer-empty {
+  color: #64748b;
+  font-style: italic;
+  padding-left: 1.5rem;
+}
+/* Tombol action di kolom kanan */
+#actionButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#actionButtons .btn-action {
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
   font-size: 0.85rem;
 }
 
-.btn-info-turun {
-  background: #0ea5e9;
+/* Tombol action di kolom kanan — sejajar horizontal */
+#actionButtons {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+#actionButtons .btn-action {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0.4rem;
+  font-size: 0.75rem;
+}
+
+.btn-action-terima { background: #0ea5e9; }
+.btn-action-terima:hover:not(:disabled) { background: #0284c7; }
+
+.btn-action-ok { background: #16a34a; }
+.btn-action-ok:hover:not(:disabled) { background: #15803d; }
+
+.btn-action-ulang { background: #dc2626; }
+.btn-action-ulang:hover:not(:disabled) { background: #b91c1c; }
+/* ===== CHAT ===== */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-messages {
+  background: var(--coffee-dark);
+  border: 1px solid var(--coffee-light);
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-height: 180px;
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-empty {
+  color: var(--cream-soft);
+  font-size: 0.75rem;
+  font-style: italic;
+  text-align: center;
+  margin: auto;
+}
+
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.chat-msg-own {
+  align-self: flex-end;
+  background: #1e3a8a;
   color: #fff;
 }
-.btn-info-turun:hover {
+
+.chat-msg-other {
+  align-self: flex-start;
+  background: var(--coffee-mid);
+  color: var(--cream);
+  border: 1px solid var(--coffee-light);
+}
+
+.chat-msg-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.65rem;
+  opacity: 0.7;
+  margin-bottom: 0.15rem;
+}
+
+.chat-msg-sender {
+  font-weight: 600;
+}
+
+.chat-msg-time {
+  font-size: 0.6rem;
+}
+
+.chat-msg-body {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.chat-input-wrap {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.chat-input {
+  flex: 1;
+  background: var(--coffee-dark);
+  border: 1px solid var(--coffee-light);
+  border-radius: 6px;
+  color: var(--cream);
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
+  font-family: 'Inter', sans-serif;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--cream-soft);
+}
+
+.chat-input::placeholder {
+  color: #8A7A6C;
+}
+
+.chat-send-btn {
+  background: #0ea5e9;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.chat-send-btn:hover {
   background: #0284c7;
 }
-.btn-info-turun-sent {
-  background: #16a34a;
+
+.chat-tabs {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
 }
-.btn-info-turun-sent:hover {
-  background: #15803d;
+
+.chat-tab {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--coffee-light);
+  color: var(--cream-soft);
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.7rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.chat-tab:hover {
+  background: var(--coffee-light);
+  color: var(--cream);
+}
+
+.chat-tab.active {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+  color: #fff;
+}
+/* Filter horizontal */
+.filter-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+}
+
+.filter-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-item .form-label-sm {
+  font-size: 0.6rem;
+  margin-bottom: 0.15rem;
+}
+
+.filter-item .form-control-sm,
+.filter-item .form-select-sm {
+  font-size: 0.7rem;
+  padding: 0.3rem 0.4rem;
+}
+
+/* Tablet/landscape — wrap kalau sempit */
+@media (max-width: 1200px) {
+  .filter-row {
+    flex-wrap: wrap;
+  }
+
+  .filter-item {
+    flex: 1 1 calc(50% - 0.2rem);
+  }
 }

@@ -8,10 +8,9 @@ const LAB_QC_PIN = '1234';
 
 const allMixerCache = {};
 const allBatchLogCache = {};
+const selectedMixers = new Set();
 
-// tracking buat notif
 const lastKnownInfoTurun = {};
-const lastKnownDiterimaLab = {};
 
 // ===== PIN =====
 function checkPin() {
@@ -100,32 +99,26 @@ function renderAllMixerGrid() {
   Object.keys(LINES).forEach((lineKey) => {
     const section = document.createElement('div');
     section.className = 'mb-3';
-    section.innerHTML = `<p class="form-label-sm mb-2">${LINES[lineKey].name}</p><div class="row g-3" id="mixerGroup-${lineKey}"></div>`;
+    section.innerHTML = `<p class="form-label-sm mb-2">${LINES[lineKey].name}</p><div class="row g-2" id="mixerGroup-${lineKey}"></div>`;
     wrap.appendChild(section);
 
     const row = section.querySelector(`#mixerGroup-${lineKey}`);
     LINES[lineKey].mixers.forEach((mixerName) => {
       const key = `${lineKey}-${mixerName}`;
       const col = document.createElement('div');
-      col.className = 'col-6 col-md-3 col-lg-2';
+      col.className = 'col-4 col-md-3 col-lg-2';
 
       col.innerHTML = `
         <div class="mixer-card-wrap">
-          <input type="checkbox" class="mixer-checkbox" data-mixer-check="${key}" onchange="updateSelectedCount()">
           <span class="mixer-badge" data-mixer-badge="${key}"></span>
-          <div class="mixer-card">
-            <div class="mixer-card-link">
-              <div class="mixer-icon-wrap">${iconTpl}</div>
-              <p class="mixer-name">${mixerName}</p>
-              <p class="mixer-batch-label">Batch</p>
-              <p class="mixer-batch-value" data-mixer="${key}">-</p>
-              <p class="mixer-note" data-mixer-note="${key}">-</p>
-            </div>
-            <div class="mixer-actions">
-              <button type="button" class="btn-mini btn-terima" data-terima="${key}" onclick="handleTerima('${lineKey}', '${mixerName}')">Terima</button>
-              <button type="button" class="btn-mini btn-ok" data-qc-ok="${key}" onclick="handleQcOk('${lineKey}', '${mixerName}')">OK</button>
-              <button type="button" class="btn-mini btn-ulang" data-qc-ulang="${key}" onclick="handleQcUlang('${lineKey}', '${mixerName}')">Ulang</button>
-            </div>
+          <div class="mixer-card-select" data-mixer-select="${key}" onclick="toggleMixerSelect('${key}')">
+            <div class="mixer-icon-wrap">${iconTpl}</div>
+            <p class="mixer-name">${mixerName}</p>
+            <div class="mixer-divider"></div>
+            <p class="mixer-batch-label">Batch</p>
+            <p class="mixer-batch-value" data-mixer="${key}">-</p>
+            <div class="mixer-divider"></div>
+            <p class="mixer-note" data-mixer-note="${key}">-</p>
           </div>
         </div>
       `;
@@ -161,6 +154,8 @@ function updateMixerCard(key, data) {
         noteText = qcApproved ? 'Tuang ✓ · Sampling ✓ · QC ✓' : 'Tuang ✓ · Sampling ✓';
       } else if (sudahTuang) {
         noteText = 'Tuang ✓ · belum Sampling';
+      } else if (sudahSampling) {
+        noteText = 'Sampling ✓';
       }
     }
   }
@@ -189,179 +184,122 @@ function updateMixerCard(key, data) {
       badge.className = 'mixer-badge';
     }
   }
+}
 
-  const terimaBtn = document.querySelector(`[data-terima="${key}"]`);
-  if (terimaBtn) {
-    if (infoTurun && !diterimaLab) {
-      terimaBtn.style.display = 'inline-block';
+// ===== MULTI SELECT =====
+function toggleMixerSelect(key) {
+  const card = document.querySelector(`[data-mixer-select="${key}"]`);
+  if (!card) return;
+
+  if (selectedMixers.has(key)) {
+    selectedMixers.delete(key);
+    card.classList.remove('selected');
+  } else {
+    selectedMixers.add(key);
+    card.classList.add('selected');
+  }
+  updateActionButtonsState();
+}
+
+function clearAllSelected() {
+  selectedMixers.clear();
+  document.querySelectorAll('.mixer-card-select.selected').forEach((el) => {
+    el.classList.remove('selected');
+  });
+  updateActionButtonsState();
+}
+
+// ===== RENDER TOMBOL ACTION =====
+function renderActionButtons() {
+  const container = document.getElementById('actionButtons');
+  if (!container) return;
+
+  container.innerHTML = `
+    <button type="button" class="btn-action btn-action-terima" onclick="handleBulkTerima()">Terima</button>
+    <button type="button" class="btn-action btn-action-ok" onclick="handleBulkOk()">OK</button>
+    <button type="button" class="btn-action btn-action-ulang" onclick="handleBulkUlang()">Ulang</button>
+  `;
+
+  updateActionButtonsState();
+}
+
+function updateActionButtonsState() {
+  const hasSelected = selectedMixers.size > 0;
+
+  document.querySelectorAll('.btn-action').forEach((btn) => {
+    if (!hasSelected) {
+      btn.disabled = true;
+      btn.style.opacity = '0.4';
+      btn.style.cursor = 'not-allowed';
     } else {
-      terimaBtn.style.display = 'none';
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
     }
-  }
-
-  const okBtn = document.querySelector(`[data-qc-ok="${key}"]`);
-  const ulangBtn = document.querySelector(`[data-qc-ulang="${key}"]`);
-  const disabled = !diterimaLab;
-
-  if (okBtn) {
-    okBtn.disabled = disabled;
-    okBtn.style.opacity = disabled ? '0.4' : '1';
-  }
-  if (ulangBtn) {
-    ulangBtn.disabled = disabled;
-    ulangBtn.style.opacity = disabled ? '0.4' : '1';
-  }
-}
-
-// ===== AKSI TERIMA =====
-function handleTerima(lineKey, mixerName) {
-  const key = `${lineKey}-${mixerName}`;
-  const data = allMixerCache[key];
-  if (!data) return;
-
-  if (!data.infoTurunRequested) {
-    showLabToast(`⚠️ ${mixerName} belum ada info turun dari Helper QC.`);
-    return;
-  }
-
-  if (data.diterimaLab) {
-    showLabToast(`⚠️ ${mixerName} sudah diterima.`);
-    return;
-  }
-
-
-  mixerDocRef(key).set({
-    diterimaLab: true,
-  }, { merge: true }).then(() => {
-    // Toast aja di Lab QC (gak ada suara — suara di Helper QC)
-    showLabToast(`✅ ${mixerName} campuran diterima.`);
-  }).catch((err) => {
-    console.error('Gagal terima:', err);
-    showLabToast(`❌ Gagal terima ${mixerName}. Coba lagi.`);
   });
 }
 
-// ===== AKSI OK =====
-function handleQcOk(lineKey, mixerName) {
-  const key = `${lineKey}-${mixerName}`;
-  const data = allMixerCache[key];
-  if (!data) return;
-
-  const activeId = data.activeBatchLogId;
-  const batchLog = activeId ? allBatchLogCache[activeId] : null;
-
-  if (!activeId || !batchLog) {
-    showLabToast(`⚠️ ${mixerName} belum ada batch jalan.`);
+// ===== BULK TERIMA =====
+function handleBulkTerima() {
+  if (selectedMixers.size === 0) {
+    showLabToast('Pilih mixer dulu.');
     return;
   }
 
-  if (!batchLog.jamSampling) {
-    showLabToast(`⚠️ ${mixerName} belum di-sampling.`);
-    return;
-  }
-
-  if (!data.diterimaLab) {
-    showLabToast(`⚠️ ${mixerName} belum diterima lab. Klik "Terima" dulu.`);
-    return;
-  }
-
-  const confirmed = confirm(`OK untuk ${mixerName}? Campuran dianggap lolos QC.`);
-  if (!confirmed) return;
-
-  doQcOk(key, activeId);
-}
-
-function doQcOk(key, activeId) {
-  const now = new Date();
-  const jam = formatJam(now);
-
-  return db.collection('batchLog').doc(activeId).update({
-    jamQcOk: jam,
-    qcApproved: true,
-    needsResample: false,
-  }).then(() => {
-    return mixerDocRef(key).set({
-      qcApproved: true,
-      needsResample: false,
-    }, { merge: true });
-  });
-}
-
-// ===== AKSI ULANG =====
-function handleQcUlang(lineKey, mixerName) {
-  const key = `${lineKey}-${mixerName}`;
-  const data = allMixerCache[key];
-  if (!data) return;
-
-  const activeId = data.activeBatchLogId;
-  const batchLog = activeId ? allBatchLogCache[activeId] : null;
-
-  if (!activeId || !batchLog) {
-    showLabToast(`⚠️ ${mixerName} belum ada batch jalan.`);
-    return;
-  }
-
-  if (!batchLog.jamSampling) {
-    showLabToast(`⚠️ ${mixerName} belum di-sampling.`);
-    return;
-  }
-
-  if (!data.diterimaLab) {
-    showLabToast(`⚠️ ${mixerName} belum diterima lab. Klik "Terima" dulu.`);
-    return;
-  }
-
-  const confirmed = confirm(`Sampling ulang untuk ${mixerName}? Campuran dianggap tidak OK.`);
-  if (!confirmed) return;
-
-  doQcUlang(key, activeId);
-}
-
-function doQcUlang(key, activeId) {
-  const now = new Date();
-  const jam = formatJam(now);
-
-  return db.collection('batchLog').doc(activeId).update({
-    qcApproved: false,
-    needsResample: true,
-    jamQcUlang: firebase.firestore.FieldValue.arrayUnion(jam),
-  }).then(() => {
-    return mixerDocRef(key).set({
-      qcApproved: false,
-      needsResample: true,
-    }, { merge: true });
-  });
-}
-
-// ===== BULK ACTION =====
-function getSelectedMixers() {
-  const checkboxes = document.querySelectorAll('.mixer-checkbox:checked');
-  return Array.from(checkboxes).map((cb) => cb.dataset.mixerCheck);
-}
-
-function updateSelectedCount() {
-  const count = getSelectedMixers().length;
-  document.getElementById('selectedCount').textContent = `${count} mixer dipilih`;
-}
-
-function clearAllSelection() {
-  document.querySelectorAll('.mixer-checkbox').forEach((cb) => {
-    cb.checked = false;
-  });
-  updateSelectedCount();
-}
-
-function handleBulkOk() {
-  const selected = getSelectedMixers();
-  if (selected.length === 0) {
-    showLabToast('⚠️ Pilih mixer dulu.');
-    return;
-  }
-
+  const selectedArr = Array.from(selectedMixers);
   const valid = [];
   const invalid = [];
 
-  selected.forEach((key) => {
+  selectedArr.forEach((key) => {
+    const data = allMixerCache[key];
+    if (!data) { invalid.push(key); return; }
+
+    if (!data.infoTurunRequested) {
+      invalid.push(key);
+      return;
+    }
+    if (data.diterimaLab) {
+      invalid.push(key);
+      return;
+    }
+    valid.push(key);
+  });
+
+  if (valid.length === 0) {
+    showLabToast(`⚠️ Tidak ada mixer yang bisa diterima.`);
+    return;
+  }
+
+  const confirmed = confirm(`Terima ${valid.length} mixer?`);
+  if (!confirmed) return;
+
+  const promises = valid.map((key) =>
+    mixerDocRef(key).set({ diterimaLab: true }, { merge: true })
+  );
+
+  Promise.all(promises).then(() => {
+    let msg = `✅ ${valid.length} mixer campuran diterima.`;
+    if (invalid.length > 0) msg += ` (${invalid.length} di-skip)`;
+    showLabToast(msg);
+    clearAllSelected();
+  }).catch((err) => {
+    console.error('Gagal bulk terima:', err);
+    showLabToast('❌ Sebagian gagal. Cek console.');
+  });
+}
+
+// ===== BULK OK =====
+function handleBulkOk() {
+  if (selectedMixers.size === 0) {
+    showLabToast('Pilih mixer dulu.');
+    return;
+  }
+
+  const selectedArr = Array.from(selectedMixers);
+  const valid = [];
+  const invalid = [];
+
+  selectedArr.forEach((key) => {
     const data = allMixerCache[key];
     if (!data) { invalid.push(key); return; }
 
@@ -381,7 +319,7 @@ function handleBulkOk() {
     return;
   }
 
-  const confirmed = confirm(`Yakin OK ${valid.length} mixer?${invalid.length > 0 ? ` (${invalid.length} di-skip)` : ''}`);
+  const confirmed = confirm(`OK ${valid.length} mixer?`);
   if (!confirmed) return;
 
   const promises = valid.map(({ key, activeId }) => doQcOk(key, activeId));
@@ -390,24 +328,25 @@ function handleBulkOk() {
     let msg = `✅ ${valid.length} mixer sudah di-OK.`;
     if (invalid.length > 0) msg += ` (${invalid.length} di-skip)`;
     showLabToast(msg);
-    clearAllSelection();
+    clearAllSelected();
   }).catch((err) => {
     console.error('Gagal bulk OK:', err);
     showLabToast('❌ Sebagian gagal. Cek console.');
   });
 }
 
+// ===== BULK ULANG =====
 function handleBulkUlang() {
-  const selected = getSelectedMixers();
-  if (selected.length === 0) {
-    showLabToast('⚠️ Pilih mixer terlebih dahulu.');
+  if (selectedMixers.size === 0) {
+    showLabToast('Pilih mixer dulu.');
     return;
   }
 
+  const selectedArr = Array.from(selectedMixers);
   const valid = [];
   const invalid = [];
 
-  selected.forEach((key) => {
+  selectedArr.forEach((key) => {
     const data = allMixerCache[key];
     if (!data) { invalid.push(key); return; }
 
@@ -427,7 +366,7 @@ function handleBulkUlang() {
     return;
   }
 
-  const confirmed = confirm(`Yakin Ulang ${valid.length} mixer?${invalid.length > 0 ? ` (${invalid.length} di-skip)` : ''}`);
+  const confirmed = confirm(`Ulang ${valid.length} mixer? Campuran dianggap tidak OK.`);
   if (!confirmed) return;
 
   const promises = valid.map(({ key, activeId }) => doQcUlang(key, activeId));
@@ -436,14 +375,50 @@ function handleBulkUlang() {
     let msg = `⚠️ ${valid.length} mixer minta sampling ulang.`;
     if (invalid.length > 0) msg += ` (${invalid.length} di-skip)`;
     showLabToast(msg);
-    clearAllSelection();
+    clearAllSelected();
   }).catch((err) => {
     console.error('Gagal bulk Ulang:', err);
     showLabToast('❌ Sebagian gagal. Cek console.');
   });
 }
 
-// ===== RIWAYAT + FILTER =====
+// ===== AKSI OK =====
+function doQcOk(key, activeId) {
+  const now = new Date();
+  const jam = formatJam(now);
+
+  return db.collection('batchLog').doc(activeId).update({
+    jamQcOk: jam,
+    qcApproved: true,
+    needsResample: false,
+  }).then(() => {
+    return mixerDocRef(key).set({
+      qcApproved: true,
+      needsResample: false,
+    }, { merge: true });
+  });
+}
+
+// ===== AKSI ULANG =====
+function doQcUlang(key, activeId) {
+  const now = new Date();
+  const jam = formatJam(now);
+
+  return db.collection('batchLog').doc(activeId).update({
+    qcApproved: false,
+    needsResample: true,
+    jamQcUlang: firebase.firestore.FieldValue.arrayUnion(jam),
+  }).then(() => {
+    return mixerDocRef(key).set({
+      qcApproved: false,
+      needsResample: true,
+      infoTurunRequested: false,
+      diterimaLab: false,
+    }, { merge: true });
+  });
+}
+
+// ===== RIWAYAT + FILTER (buat download Excel) =====
 function isSameDate(date, isoDateStr) {
   if (!isoDateStr) return true;
   const [y, m, d] = isoDateStr.split('-').map(Number);
@@ -471,64 +446,6 @@ function getFilteredRows() {
     .filter((r) => matchProdukFilter(r, p))
     .filter((r) => matchShiftFilter(r, s));
 }
-function renderLabQcRekap() {
-  const tbody = document.getElementById('labQcRekapBody');
-  const p = document.getElementById('produkFilter').value;
-  const filtered = getFilteredRows();
-  const linesToShow = p === 'A-MF'
-    ? [{ lineKey: 'A', mixerOnly: 'MF' }]
-    : p === 'A'
-      ? [{ lineKey: 'A', mixerOnly: null, exclude: ['MF'] }]
-      : p === 'B'
-        ? [{ lineKey: 'B', mixerOnly: null }]
-        : [{ lineKey: 'A', mixerOnly: null }, { lineKey: 'B', mixerOnly: null }];
-
-  const html = [];
-  let total = 0;
-  linesToShow.forEach(({ lineKey, mixerOnly, exclude }) => {
-    const lineInfo = LINES[lineKey];
-    let order = getMixerOrder(lineKey);
-    if (mixerOnly) order = order.filter((m) => m === mixerOnly);
-    if (exclude) order = order.filter((m) => !exclude.includes(m));
-
-    order.forEach((mixerName) => {
-      const groupRows = filtered
-        .filter((r) => r.line === lineKey && r.mixerName === mixerName)
-        .sort(sortByBatchNumber);
-
-      const label = MIXER_LABEL_OVERRIDE[`${lineKey}-${mixerName}`] || lineInfo.short;
-      html.push(`<tr class="group-header"><td colspan="9">${label} · ${mixerName}</td></tr>`);
-
-      if (groupRows.length === 0) {
-        html.push(`<tr><td colspan="9" class="text-center empty-note">Belum ada batch</td></tr>`);
-        return;
-      }
-
-      groupRows.forEach((r) => {
-        total++;
-        html.push(`
-          <tr>
-            <td>${lineInfo.name}</td>
-            <td>${r.mixerName}</td>
-            <td>${r.tanggal || '-'}</td>
-            <td>${r.shift ? 'Shift ' + r.shift : '-'}</td>
-            <td>${r.jamTuangMikro || '-'}</td>
-            <td>${r.jamSampling || '-'}</td>
-            <td>${r.jamQcOk || '-'}</td>
-            <td>${r.jamDiscard || '-'}</td>
-            <td>${r.batchNumber}</td>
-          </tr>
-        `);
-      });
-    });
-  });
-
-  if (total === 0 && html.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-center empty-note">Belum ada data buat filter ini</td></tr>';
-    return;
-  }
-  tbody.innerHTML = html.join('');
-}
 
 function downloadLabQcSpreadsheet() {
   const selectedDate = document.getElementById('dateFilter').value;
@@ -553,9 +470,9 @@ function downloadLabQcSpreadsheet() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Lab QC');
   const tanggalFormatted = selectedDate
-  ? new Date(selectedDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-  : 'semua tanggal';
-XLSX.writeFile(wb, `Data Riwayat Batch - ${tanggalFormatted}.xlsx`);
+    ? new Date(selectedDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+    : 'semua tanggal';
+  XLSX.writeFile(wb, `Data Riwayat Batch - ${tanggalFormatted}.xlsx`);
 }
 
 // ===== subscribe =====
@@ -568,7 +485,7 @@ function subscribeAllMixers() {
       updateMixerCard(key, data);
     });
 
-    // ===== TAMBAHAN: detect infoTurunRequested false → true =====
+    // Detect infoTurunRequested false → true
     snapshot.docChanges().forEach((change) => {
       const key = change.doc.id;
       const data = change.doc.data();
@@ -582,7 +499,6 @@ function subscribeAllMixers() {
 
       lastKnownInfoTurun[key] = newInfoTurun;
     });
-    // ===== /TAMBAHAN =====
   }, (err) => console.error('Gagal dengerin mixers:', err));
 }
 
@@ -603,20 +519,15 @@ function subscribeAllBatchLog() {
     Object.keys(allMixerCache).forEach((key) => {
       updateMixerCard(key, allMixerCache[key]);
     });
-
-    renderLabQcRekap();
   }, (err) => console.error('Gagal dengerin batchLog:', err));
 }
 
 function initLabQcPage() {
   const dateInput = document.getElementById('dateFilter');
   dateInput.value = new Date().toISOString().slice(0, 10);
-  dateInput.addEventListener('change', renderLabQcRekap);
-
-  document.getElementById('produkFilter').addEventListener('change', renderLabQcRekap);
-  document.getElementById('shiftFilter').addEventListener('change', renderLabQcRekap);
 
   renderAllMixerGrid();
+  renderActionButtons();
   startClock();
   subscribeAllMixers();
   subscribeAllBatchLog();
@@ -627,5 +538,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('pinOverlay').classList.add('d-none');
     document.getElementById('labQcContent').classList.remove('d-none');
     initLabQcPage();
+    initChat('lab-qc');
   }
 });

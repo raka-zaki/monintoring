@@ -3,6 +3,7 @@ const LINES = {
   B: { name: 'Cappucino', mixers: ['MC 01', 'MC 02', 'MC 03', 'MPC 01', 'MPC 02'] },
 };
 
+const TUANG_MIKRO_MIXERS = ['MPD', 'MPE', 'MF', 'MPC 01', 'MPC 02'];
 const OPERATOR_PIN = '1234';
 
 function getLineParam() {
@@ -21,8 +22,7 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
-// ===== role per device =====
-
+// ===== role =====
 function getRole() {
   return localStorage.getItem('deviceRole');
 }
@@ -71,10 +71,19 @@ function applyRoleUI() {
     const lineKey = getLineParam();
     renderMixerGrid(lineKey);
   }
+
+  // Chat cuma muncul buat operator
+  const chatPanel = document.getElementById('chatPanel');
+  if (chatPanel) {
+    if (role === 'operator') {
+      chatPanel.classList.remove('d-none');
+    } else {
+      chatPanel.classList.add('d-none');
+    }
+  }
 }
 
-// ===== SANDI OPERATOR =====
-
+// ===== SANDI =====
 function checkOperatorPin() {
   const input = document.getElementById('operatorPinInput').value.trim();
   const errEl = document.getElementById('operatorPinError');
@@ -86,6 +95,10 @@ function checkOperatorPin() {
     document.getElementById('operatorPinInput').value = '';
     applyRoleUI();
     showShiftOverlayIfNeeded();
+
+    // Init chat untuk operator
+    const lineKey = getLineParam();
+    initChat('operator', lineKey);
   } else {
     errEl.classList.remove('d-none');
   }
@@ -99,7 +112,6 @@ function cancelOperatorPin() {
 }
 
 // ===== shift =====
-
 function getShift() {
   return localStorage.getItem('deviceShift');
 }
@@ -134,91 +146,43 @@ function applyShiftUI() {
   if (badge) badge.textContent = shift ? `Shift ${shift}` : '-';
 }
 
-// ===== kartu mixer =====
+// ===== CACHE =====
+const mixerStatus = {};
+const mixerBatchNumber = {};
+const mixerActiveBatchLog = {};
+const mixerLastKnownStatus = {};
+const mixerLastKnownQcApproved = {};
+const mixerQcApproved = {};
+const mixerNeedsResample = {};
+const mixerInfoTurun = {};
+const mixerDiterimaLab = {};
+const mixerLastKnownDiterimaLab = {};
+const batchLogCache = {};
+let shiftStartAt = null;
 
-function renderMixerGrid(lineKey) {
-  const grid = document.getElementById('mixerGrid');
-  const iconTpl = document.getElementById('mixerIconTpl').innerHTML;
-  const mixers = LINES[lineKey].mixers;
-  const role = getRole();
-  grid.innerHTML = '';
-
-  mixers.forEach((mixerName) => {
-    const key = `${lineKey}-${mixerName}`;
-    const col = document.createElement('div');
-    col.className = 'col-6 col-md-3';
-
-    let actionsHtml = '';
-    let extraBtn = '';
-
-    if (role === 'operator') {
-      actionsHtml = `
-        <div class="mixer-actions">
-          <button type="button" class="btn-mini btn-sampling" onclick="handleSampling('${lineKey}', '${mixerName}')">Sampling</button>
-          <button type="button" class="btn-mini btn-tuang" onclick="handleTuangMikro('${lineKey}', '${mixerName}')">Tuang Mikro</button>
-        </div>`;
-      extraBtn = `<button type="button" class="btn-mini btn-discard" onclick="handleDiscard('${lineKey}', '${mixerName}')">Discharge</button>`;
-    } else if (role === 'qc') {
-      actionsHtml = `
-        <div class="mixer-actions">
-          <button type="button" class="btn-mini btn-info-turun" data-info-turun="${key}" onclick="handleInfoTurun('${lineKey}', '${mixerName}')">Campuran Turun</button>
-        </div>`;
-    }
-
-    col.innerHTML = `
-      <div class="mixer-card-wrap">
-        <span class="mixer-badge" data-mixer-badge="${key}"></span>
-        <div class="mixer-card">
-          <div class="mixer-card-link">
-            <div class="mixer-icon-wrap">${iconTpl}</div>
-            <p class="mixer-name">${mixerName}</p>
-            <p class="mixer-batch-label">Batch</p>
-            <p class="mixer-batch-value" data-mixer="${key}">-</p>
-            <p class="mixer-note" data-mixer-note="${key}">-</p>
-          </div>
-          ${actionsHtml}
-        </div>
-        ${extraBtn}
-      </div>
-    `;
-    grid.appendChild(col);
-  });
-}
-
-function showActionModal(title, bodyText, onConfirm) {
-  document.getElementById('actionModalTitle').textContent = title;
-  document.getElementById('actionModalBody').textContent = bodyText;
-
-  const confirmBtn = document.getElementById('actionModalConfirm');
-  confirmBtn.textContent = 'Selesai';
-  confirmBtn.onclick = () => {
-    if (onConfirm) onConfirm();
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('actionModal')).hide();
-  };
-
-  bootstrap.Modal.getOrCreateInstance(document.getElementById('actionModal')).show();
-}
-
-// ===== suara =====
-
+// ===== SUARA =====
 const HURUF_SPOKEN = {
   'A': 'a', 'B': 'be', 'C': 'ce', 'D': 'de', 'E': 'e',
   'F': 'ef', 'G': 'ge', 'H': 'ha', 'I': 'i', 'J': 'je',
   'K': 'ka', 'L': 'el', 'M': 'em', 'N': 'en', 'O': 'o',
-  'P': 'pe', 'Q': 'ki', 'R': 'er', 'S': 'es', 'T': 'te',
+  'P': 'p', 'Q': 'ki', 'R': 'er', 'S': 'es', 'T': 'te',
   'U': 'u', 'V': 've', 'W': 'we', 'X': 'eks', 'Y': 'ye', 'Z': 'zet',
   '0': 'nol', '1': 'satu', '2': 'dua', '3': 'tiga', '4': 'empat',
   '5': 'lima', '6': 'enam', '7': 'tujuh', '8': 'delapan', '9': 'sembilan',
 };
 
 function formatSpokenMixer(mixerName) {
-  return mixerName
-    .split('')
-    .map((c) => {
-      if (c === ' ') return ' ';
-      return HURUF_SPOKEN[c.toUpperCase()] || c;
-    })
-    .join(' ');
+  return mixerName.split('').map((c) => {
+    if (c === ' ') return ' ';
+    return HURUF_SPOKEN[c.toUpperCase()] || c;
+  }).join(' ');
+}
+
+function joinNames(names) {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} dan ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')}, dan ${names[names.length - 1]}`;
 }
 
 function speakAlert(text) {
@@ -230,6 +194,7 @@ function speakAlert(text) {
 let spokenAlertInterval = null;
 
 function startSpokenAlert(text) {
+  stopSpokenAlert();
   const say = () => speakAlert(text);
   say();
   spokenAlertInterval = setInterval(say, 5000);
@@ -237,21 +202,11 @@ function startSpokenAlert(text) {
 
 function stopSpokenAlert() {
   clearInterval(spokenAlertInterval);
+  spokenAlertInterval = null;
   speechSynthesis.cancel();
 }
 
-// ===== cache lokal =====
-const mixerStatus = {};
-const mixerBatchNumber = {};
-const mixerActiveBatchLog = {};
-const mixerLastKnownStatus = {};
-const mixerLastKnownQcApproved = {};
-const mixerQcApproved = {};
-const mixerNeedsResample = {};
-const mixerInfoTurun = {};
-const mixerDiterimaLab = {};
-const mixerLastKnownDiterimaLab = {};
-
+// ===== HELPERS =====
 function formatJam(date) {
   return date.toLocaleTimeString('id-ID', { hour12: false, hour: '2-digit', minute: '2-digit' });
 }
@@ -262,6 +217,350 @@ function formatTanggal(date) {
 
 function mixerDocRef(key) {
   return db.collection('mixers').doc(key);
+}
+
+function showOperatorToast(message) {
+  document.getElementById('opToastBody').textContent = message;
+  bootstrap.Toast.getOrCreateInstance(document.getElementById('opToast'), { delay: 5000 }).show();
+}
+
+// ===== MULTI SELECT =====
+const selectedMixers = new Set();
+
+function toggleMixerSelect(key) {
+  const card = document.querySelector(`[data-mixer-select="${key}"]`);
+  if (!card) return;
+
+  if (selectedMixers.has(key)) {
+    selectedMixers.delete(key);
+    card.classList.remove('selected');
+  } else {
+    selectedMixers.add(key);
+    card.classList.add('selected');
+  }
+  updateActionButtonsState();
+}
+
+function clearAllSelected() {
+  selectedMixers.clear();
+  document.querySelectorAll('.mixer-card-select.selected').forEach((el) => {
+    el.classList.remove('selected');
+  });
+  updateActionButtonsState();
+}
+
+function updateActionButtonsState() {
+  const role = getRole();
+  if (role !== 'operator') return;
+
+  // Cek apakah ada mixer yang bisa tuang mikro
+  const canTuang = Array.from(selectedMixers).some((key) => {
+    const mixerName = key.split('-').slice(1).join('-');
+    if (!TUANG_MIKRO_MIXERS.includes(mixerName)) return false;
+
+    const result = validateBulkAction(key, mixerName, 'tuang-mikro');
+    return result.valid;
+  });
+
+  const tuangBtn = document.querySelector('.btn-action-tuang');
+  if (tuangBtn) {
+    if (selectedMixers.size === 0 || !canTuang) {
+      tuangBtn.disabled = true;
+      tuangBtn.style.opacity = '0.4';
+      tuangBtn.style.cursor = 'not-allowed';
+    } else {
+      tuangBtn.disabled = false;
+      tuangBtn.style.opacity = '1';
+      tuangBtn.style.cursor = 'pointer';
+    }
+  }
+
+  const dischargeBtn = document.querySelector('.btn-action-discharge');
+  if (dischargeBtn) {
+    const validDischarge = getValidDischargeMixers();
+    if (validDischarge.length === 0) {
+      dischargeBtn.disabled = true;
+      dischargeBtn.style.opacity = '0.4';
+      dischargeBtn.style.cursor = 'not-allowed';
+    } else {
+      dischargeBtn.disabled = false;
+      dischargeBtn.style.opacity = '1';
+      dischargeBtn.style.cursor = 'pointer';
+    }
+  }
+}
+
+// ===== AUTO-DETECT DISCHARGE =====
+function getValidDischargeMixers() {
+  const lineKey = getLineParam();
+  const mixers = LINES[lineKey].mixers;
+  const valid = [];
+
+  mixers.forEach((mixerName) => {
+    const key = `${lineKey}-${mixerName}`;
+    const result = validateBulkAction(key, mixerName, 'discharge');
+    if (result.valid) {
+      valid.push({ key, lineKey, mixerName });
+    }
+  });
+
+  return valid;
+}
+
+// ===== RENDER CARD =====
+function renderMixerGrid(lineKey) {
+  const grid = document.getElementById('mixerGrid');
+  const iconTpl = document.getElementById('mixerIconTpl').innerHTML;
+  const mixers = LINES[lineKey].mixers;
+  const role = getRole();
+  grid.innerHTML = '';
+
+  mixers.forEach((mixerName) => {
+    const key = `${lineKey}-${mixerName}`;
+    const col = document.createElement('div');
+    col.className = 'col-4 col-md-3 col-lg-2';
+
+    col.innerHTML = `
+      <div class="mixer-card-wrap">
+        <div class="mixer-card-select" data-mixer-select="${key}" onclick="toggleMixerSelect('${key}')">
+          <span class="mixer-badge" data-mixer-badge="${key}"></span>
+          <div class="mixer-icon-wrap">${iconTpl}</div>
+          <p class="mixer-name">${mixerName}</p>
+          <div class="mixer-divider"></div>
+          <p class="mixer-batch-label">Batch</p>
+          <p class="mixer-batch-value" data-mixer="${key}">-</p>
+          <div class="mixer-divider"></div>
+          <p class="mixer-note" data-mixer-note="${key}">-</p>
+        </div>
+      </div>
+    `;
+    grid.appendChild(col);
+  });
+
+  renderActionButtons(role);
+
+  selectedMixers.forEach((key) => {
+    const card = document.querySelector(`[data-mixer-select="${key}"]`);
+    if (card) card.classList.add('selected');
+  });
+
+  mixers.forEach((mixerName) => {
+    const k = `${lineKey}-${mixerName}`;
+    refreshMixerBadge(k);
+    refreshMixerNote(k);
+  });
+
+  updateActionButtonsState();
+}
+
+function renderActionButtons(role) {
+  const container = document.getElementById('actionButtons');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (role === 'operator') {
+    container.innerHTML = `
+      <button type="button" class="btn-action btn-action-sampling" onclick="handleBulkAction('sampling')">Sampling</button>
+      <button type="button" class="btn-action btn-action-tuang" onclick="handleBulkAction('tuang-mikro')">Tuang Mikro</button>
+      <button type="button" class="btn-action btn-action-discharge" onclick="handleBulkAction('discharge')">Discharge</button>
+    `;
+  } else if (role === 'qc') {
+    container.innerHTML = `
+      <button type="button" class="btn-action btn-action-info-turun" onclick="handleBulkAction('info-turun')">Campuran Turun</button>
+    `;
+  }
+}
+
+// ===== BULK ACTION =====
+function handleBulkAction(actionType) {
+  if (actionType === 'discharge') {
+    let validItems = [];
+
+    if (selectedMixers.size > 0) {
+      const selectedArr = Array.from(selectedMixers);
+      selectedArr.forEach((key) => {
+        const lineKey = key.split('-')[0];
+        const mixerName = key.split('-').slice(1).join('-');
+        const result = validateBulkAction(key, mixerName, 'discharge');
+        if (result.valid) validItems.push({ key, lineKey, mixerName });
+      });
+    } else {
+      validItems = getValidDischargeMixers();
+    }
+
+    if (validItems.length === 0) {
+      showOperatorToast('❌ Tidak ada mixer yang siap discharge.');
+      return;
+    }
+
+    executeBulkAction('discharge', validItems);
+    return;
+  }
+
+  if (selectedMixers.size === 0) {
+    showOperatorToast('Pilih mixer dulu.');
+    return;
+  }
+
+  const selectedArr = Array.from(selectedMixers);
+  const valid = [];
+  const invalid = [];
+
+  selectedArr.forEach((key) => {
+    const lineKey = key.split('-')[0];
+    const mixerName = key.split('-').slice(1).join('-');
+    const result = validateBulkAction(key, mixerName, actionType);
+    if (result.valid) {
+      valid.push({ key, lineKey, mixerName });
+    } else {
+      invalid.push({ key, mixerName, reason: result.reason });
+    }
+  });
+
+ if (valid.length === 0) {
+  const firstReason = invalid.length > 0 ? invalid[0].reason : 'tidak valid';
+  const labelMap = {
+    'sampling': 'sampling',
+    'tuang-mikro': 'tuang mikro',
+    'discharge': 'discharge',
+    'info-turun': 'menurunkan campuran',
+  };
+  const label = labelMap[actionType] || actionType;
+  showOperatorToast(`❌ Tidak bisa ${label}: ${firstReason}`);
+  return;
+}
+
+  executeBulkAction(actionType, valid);
+}
+
+function validateBulkAction(key, mixerName, actionType) {
+  const activeId = mixerActiveBatchLog[key];
+  const batchLog = activeId ? batchLogCache[activeId] : null;
+  const isTuangMixer = TUANG_MIKRO_MIXERS.includes(mixerName);
+
+  if (actionType === 'sampling') {
+    if (mixerStatus[key] === 'menunggu') return { valid: false, reason: 'lagi nunggu konfirmasi' };
+    const isResample = mixerNeedsResample[key] === true;
+
+    if (isTuangMixer && !isResample && !activeId) {
+      return { valid: false, reason: 'belum tuang mikro' };
+    }
+    if (batchLog && batchLog.jamSampling && !isResample) {
+      return { valid: false, reason: 'sudah sampling' };
+    }
+    return { valid: true };
+  }
+
+  if (actionType === 'tuang-mikro') {
+    if (!isTuangMixer) return { valid: false, reason: 'tidak butuh tuang mikro' };
+    if (mixerStatus[key] === 'menunggu') return { valid: false, reason: 'lagi nunggu konfirmasi' };
+
+    // ===== FIX: kalau masih ada batch jalan → block =====
+    if (activeId) {
+      return { valid: false, reason: 'masih ada batch jalan, discharge dulu' };
+    }
+    // ===== /FIX =====
+
+    return { valid: true };
+  }
+
+  if (actionType === 'discharge') {
+    if (!activeId) return { valid: false, reason: 'belum ada batch' };
+    if (!batchLog) return { valid: false, reason: 'batch tidak ditemukan' };
+    if (isTuangMixer && !batchLog.jamTuangMikro) return { valid: false, reason: 'belum tuang mikro' };
+    if (!batchLog.jamSampling) return { valid: false, reason: 'belum sampling' };
+    if (!mixerQcApproved[key]) return { valid: false, reason: 'belum QC OK' };
+    return { valid: true };
+  }
+
+  if (actionType === 'info-turun') {
+    if (!activeId) return { valid: false, reason: 'belum ada batch' };
+    if (!batchLog || !batchLog.jamSampling) return { valid: false, reason: 'belum sampling' };
+    if (mixerNeedsResample[key]) return { valid: false, reason: 'sampling ulang belum selesai' };
+    if (mixerQcApproved[key]) return { valid: false, reason: 'sudah QC OK' };
+    if (mixerDiterimaLab[key]) return { valid: false, reason: 'sudah diterima lab' };
+    return { valid: true };
+  }
+
+  return { valid: false, reason: 'aksi tidak dikenal' };
+}
+
+function executeBulkAction(actionType, validItems) {
+  if (actionType === 'sampling' || actionType === 'tuang-mikro') {
+    const promises = validItems.map(({ key }) =>
+      mixerDocRef(key).set({
+        status: 'menunggu',
+        alertType: actionType,
+      }, { merge: true })
+    );
+
+    Promise.all(promises).then(() => {
+      const spokenNames = validItems.map((v) => formatSpokenMixer(v.mixerName));
+      const text = actionType === 'sampling' ? 'Sampling' : 'Tuang mikro';
+
+      if (getRole() === 'qc') {
+        startSpokenAlert(`${text}, ${joinNames(spokenNames)}`);
+      } else {
+        showOperatorToast(`✅ Sinyal ${text} terkirim. Menunggu konfirmasi Helper QC.`);
+      }
+      clearAllSelected();
+    }).catch((err) => {
+      console.error('Gagal bulk action:', err);
+      showOperatorToast(`❌ Gagal kirim sinyal. Coba lagi.`);
+    });
+    return;
+  }
+
+  const now = new Date();
+  const tanggal = formatTanggal(now);
+  const jam = formatJam(now);
+  const shift = getShift() || '-';
+
+  const promises = validItems.map(({ key, lineKey, mixerName }) => {
+    if (actionType === 'discharge') {
+      const activeId = mixerActiveBatchLog[key];
+      const batchLog = batchLogCache[activeId];
+      if (!batchLog) return Promise.resolve();
+      const newBatchNumber = (batchLog.batchNumber || 0) + 1;
+
+      return db.collection('batchLog').doc(activeId).update({
+        jamDiscard: jam,
+        discarded: true,
+      }).then(() => {
+        return mixerDocRef(key).set({
+          status: 'idle',
+          batchNumberToday: newBatchNumber,
+          alertType: firebase.firestore.FieldValue.delete(),
+          activeBatchLogId: firebase.firestore.FieldValue.delete(),
+          qcApproved: false,
+          needsResample: false,
+          infoTurunRequested: false,
+          diterimaLab: false,
+        }, { merge: true });
+      });
+    }
+
+    if (actionType === 'info-turun') {
+      return mixerDocRef(key).set({
+        infoTurunRequested: true,
+        diterimaLab: false,
+      }, { merge: true });
+    }
+
+    return Promise.resolve();
+  });
+
+  Promise.all(promises).then(() => {
+    const spokenNames = validItems.map((v) => formatSpokenMixer(v.mixerName));
+    const text = actionType === 'discharge' ? 'Discharge' : 'Campuran turun';
+
+    speakAlert(`${text}, ${joinNames(spokenNames)}`);
+    showOperatorToast(`✅ ${text} untuk ${validItems.length} mixer terkirim.`);
+    clearAllSelected();
+  }).catch((err) => {
+    console.error('Gagal bulk action:', err);
+    showOperatorToast(`❌ Gagal sebagian. Cek console.`);
+  });
 }
 
 // ===== ANTRIAN SINYAL QC =====
@@ -288,17 +587,14 @@ function processNextAlert() {
   const { lineKey, mixerName, alertType } = currentAlert;
 
   const label = alertType === 'sampling' ? 'Sampling' : 'Tuang Mikro';
-  const spokenMixerName = formatSpokenMixer(mixerName);
   const spokenText = alertType === 'sampling'
-    ? `Sampling, ${spokenMixerName}`
-    : `Tuang mikro, ${spokenMixerName}`;
+    ? `Sampling, ${formatSpokenMixer(mixerName)}`
+    : `Tuang mikro, ${formatSpokenMixer(mixerName)}`;
 
   startSpokenAlert(spokenText);
 
   const sisaAntrian = alertQueue.length;
-  const infoAntrian = sisaAntrian > 0
-    ? `\n\n(${sisaAntrian} penuangan lain masih menunggu di antrian.)`
-    : '';
+  const infoAntrian = sisaAntrian > 0 ? `\n\n(${sisaAntrian} penuangan lain masih menunggu di antrian.)` : '';
 
   document.getElementById('actionModalTitle').textContent = `${label} — ${mixerName}`;
   document.getElementById('actionModalBody').textContent =
@@ -318,8 +614,30 @@ function processNextAlert() {
       const tanggal = formatTanggal(now);
       const jam = formatJam(now);
       const key = `${lineKey}-${mixerName}`;
+      const isTuangMixer = TUANG_MIKRO_MIXERS.includes(mixerName);
 
       if (alertType === 'tuang-mikro') {
+        const activeId = mixerActiveBatchLog[key];
+        const batchLog = activeId ? batchLogCache[activeId] : null;
+
+        // Kalau masih ada batch jalan → block
+        if (activeId && batchLog) {
+          showOperatorToast(`⚠️ ${mixerName} masih ada batch jalan. Discharge dulu.`);
+          mixerDocRef(key).set({
+            status: 'idle',
+            alertType: firebase.firestore.FieldValue.delete(),
+          }, { merge: true });
+
+          currentAlert = null;
+          isProcessingNext = true;
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('actionModal')).hide();
+          setTimeout(() => {
+            isProcessingNext = false;
+            processNextAlert();
+          }, 400);
+          return;
+        }
+
         const currentBatch = mixerBatchNumber[key] || 1;
         const newBatchRef = db.collection('batchLog').doc();
 
@@ -349,27 +667,50 @@ function processNextAlert() {
         const activeId = mixerActiveBatchLog[key];
         const isResample = mixerNeedsResample[key] === true;
 
-        if (!activeId) {
-          showOperatorToast(`Sampling ${mixerName} diabaikan: belum ada Tuang Mikro untuk batch ini.`);
-        } else {
-          if (isResample) {
-            db.collection('batchLog').doc(activeId).update({
-              jamSamplingUlang: firebase.firestore.FieldValue.arrayUnion(jam),
-            }).then(() => {
-              return mixerDocRef(key).set({
-                status: 'idle',
-                needsResample: false,
-              }, { merge: true });
-            }).catch((err) => console.error('Gagal update sampling ulang:', err));
-          } else {
-            db.collection('batchLog').doc(activeId).update({
-              jamSampling: jam,
-            }).then(() => {
-              return mixerDocRef(key).set({
-                status: 'idle',
-              }, { merge: true });
-            }).catch((err) => console.error('Gagal update sampling:', err));
-          }
+        if (isResample && activeId) {
+          db.collection('batchLog').doc(activeId).update({
+            jamSamplingUlang: firebase.firestore.FieldValue.arrayUnion(jam),
+          }).then(() => {
+            return mixerDocRef(key).set({
+              status: 'idle',
+              needsResample: false,
+              infoTurunRequested: false,
+              diterimaLab: false,
+            }, { merge: true });
+          }).catch((err) => console.error('Gagal update sampling ulang:', err));
+        } else if (isTuangMixer && activeId) {
+          db.collection('batchLog').doc(activeId).update({
+            jamSampling: jam,
+          }).then(() => {
+            return mixerDocRef(key).set({
+              status: 'idle',
+            }, { merge: true });
+          }).catch((err) => console.error('Gagal update sampling:', err));
+        } else if (!isTuangMixer && !activeId) {
+          const currentBatch = mixerBatchNumber[key] || 1;
+          const newBatchRef = db.collection('batchLog').doc();
+
+          newBatchRef.set({
+            line: lineKey,
+            mixerName,
+            batchNumber: currentBatch,
+            tanggal,
+            jamTuangMikro: null,
+            jamSampling: jam,
+            shift: getShift() || '-',
+            qcApproved: false,
+            needsResample: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          }).then(() => {
+            return mixerDocRef(key).set({
+              status: 'idle',
+              activeBatchLogId: newBatchRef.id,
+              qcApproved: false,
+              needsResample: false,
+              infoTurunRequested: false,
+              diterimaLab: false,
+            }, { merge: true });
+          }).catch((err) => console.error('Gagal simpan sampling:', err));
         }
       }
 
@@ -387,42 +728,20 @@ function processNextAlert() {
   bootstrap.Modal.getOrCreateInstance(document.getElementById('actionModal')).show();
 }
 
-function playAlertSound(frequency = 880, durationMs = 200) {
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  if (ctx.state === 'suspended') ctx.resume();
-  const oscillator = ctx.createOscillator();
-  const gain = ctx.createGain();
-  oscillator.type = 'sine';
-  oscillator.frequency.value = frequency;
-  oscillator.connect(gain);
-  gain.connect(ctx.destination);
-  gain.gain.setValueAtTime(0.3, ctx.currentTime);
-  oscillator.start();
-  oscillator.stop(ctx.currentTime + durationMs / 1000);
-}
-
-function showOperatorToast(message) {
-  document.getElementById('opToastBody').textContent = message;
-  bootstrap.Toast.getOrCreateInstance(document.getElementById('opToast'), { delay: 5000 }).show();
-}
-
+// ===== SUBSCRIBE =====
 function notifyOperatorDone(mixerName, alertType) {
   const label = alertType === 'sampling' ? 'Sampling' : 'Tuang mikro';
-  const spokenMixerName = formatSpokenMixer(mixerName);
-  speakAlert(`${label} mixer ${spokenMixerName} sudah selesai.`);
+  speakAlert(`${label} mixer ${formatSpokenMixer(mixerName)} sudah selesai.`);
   showOperatorToast(`${label} ${mixerName} sudah selesai dikonfirmasi QC.`);
 }
 
 function notifyOperatorQcOk(mixerName) {
-  const spokenMixerName = formatSpokenMixer(mixerName);
-  speakAlert(`campuran ${spokenMixerName} sudah oke`);
-  showOperatorToast(`✅ Campuran ${mixerName} sudah di-OK oleh Lab QC.`);
+  speakAlert(`campuran ${formatSpokenMixer(mixerName)} sudah oke`);
+  showOperatorToast(`✅ Campuran ${mixerName} sudah di-OK Lab QC.`);
 }
 
-// ===== TAMBAHAN: Helper QC dapet notif pas diterima lab =====
 function notifyHelperDiterimaLab(mixerName) {
-  const spokenMixerName = formatSpokenMixer(mixerName);
-  speakAlert(`Campuran ${spokenMixerName} sudah diterima lab`);
+  speakAlert(`Campuran ${formatSpokenMixer(mixerName)} sudah diterima lab`);
   showOperatorToast(`✅ Campuran ${mixerName} sudah diterima Lab QC.`);
 }
 
@@ -444,8 +763,9 @@ function subscribeToLine(lineKey) {
 
       refreshMixerNote(key);
       refreshMixerBadge(key);
-      refreshInfoTurunButton(key);
     });
+
+    updateActionButtonsState();
 
     snapshot.docChanges().forEach((change) => {
       const key = change.doc.id;
@@ -471,11 +791,9 @@ function subscribeToLine(lineKey) {
         notifyOperatorQcOk(mixerName);
       }
 
-      // ===== TAMBAHAN: Helper QC dapet notif pas diterima lab =====
       if (prevDiterimaLab === false && newDiterimaLab === true && getRole() === 'qc') {
         notifyHelperDiterimaLab(mixerName);
       }
-      // ===== /TAMBAHAN =====
 
       mixerLastKnownStatus[key] = newStatus;
       mixerLastKnownQcApproved[key] = newQcApproved;
@@ -484,186 +802,13 @@ function subscribeToLine(lineKey) {
   }, (err) => console.error('Gagal dengerin data mixer:', err));
 }
 
-// ===== VALIDASI =====
-function isBatchSudahSampling(key) {
-  const activeId = mixerActiveBatchLog[key];
-  if (!activeId) return true;
-  const batchLog = batchLogCache[activeId];
-  if (!batchLog) return false;
-  return !!batchLog.jamSampling;
-}
-
-function requestMixerAlert(lineKey, mixerName, alertType) {
-  const key = `${lineKey}-${mixerName}`;
-  const label = alertType === 'sampling' ? 'Sampling' : 'Tuang Mikro';
-
-  if (mixerStatus[key] === 'menunggu') {
-    showActionModal(label, `${mixerName} masih menunggu respon dari sinyal sebelumnya.`);
-    return;
-  }
-
-  const isResample = mixerNeedsResample[key] === true;
-
-  if (alertType === 'sampling' && !isResample && !mixerActiveBatchLog[key]) {
-    showActionModal(
-      'Sampling',
-      `${mixerName} belum ada Penuangan Mikro untuk batch ini. Lakukan Penuangan Mikro dulu sebelum Sampling.`
-    );
-    return;
-  }
-
-  if (alertType === 'tuang-mikro' && !isBatchSudahSampling(key)) {
-    showActionModal(
-      'Tuang Mikro',
-      `${mixerName} masih ada batch yang belum di-sampling. Lakukan Sampling dulu sebelum Tuang Mikro batch berikutnya.`
-    );
-    return;
-  }
-
-  mixerDocRef(key).set({ line: lineKey, mixerName, status: 'menunggu', alertType }, { merge: true })
-    .then(() => showOperatorToast(`Pesan ${label} ${mixerName} terkirim. Menunggu QC.`))
-    .catch((err) => {
-      console.error('Gagal kirim sinyal:', err);
-      showOperatorToast(`❌ Gagal kirim sinyal ${label} ${mixerName}. Coba lagi.`);
-    });
-}
-
-function handleSampling(lineKey, mixerName) {
-  requestMixerAlert(lineKey, mixerName, 'sampling');
-}
-
-function handleTuangMikro(lineKey, mixerName) {
-  requestMixerAlert(lineKey, mixerName, 'tuang-mikro');
-}
-
-// ===== INFO TURUN (Helper QC) =====
-function handleInfoTurun(lineKey, mixerName) {
-  const key = `${lineKey}-${mixerName}`;
-
-  // Validasi 1: kalau udah QC OK, tolak
-  if (mixerQcApproved[key]) {
-    showActionModal('Campuran Turun', `${mixerName} sudah di-OK oleh Lab QC. Tidak perlu info campuran turun lagi.`);
-    return;
-  }
-
-  // Validasi 2: kalau udah diterima lab, stop
-  if (mixerDiterimaLab[key]) {
-    showActionModal('Campuran Turun', `${mixerName} sudah diterima Lab QC. Tidak perlu info campuran turun lagi.`);
-    return;
-  }
-
-  mixerDocRef(key).set({
-    infoTurunRequested: true,
-    diterimaLab: false,
-  }, { merge: true }).then(() => {
-    // Toast aja di Helper QC (gak ada suara — suara di Lab QC)
-    showOperatorToast(`✅ Info campuran turun ${mixerName} terkirim ke Lab QC.`);
-  }).catch((err) => {
-    console.error('Gagal kirim info campuran turun:', err);
-    showOperatorToast(`❌ Gagal kirim info campuran turun ${mixerName}. Coba lagi.`);
-  });
-}
-
-function refreshInfoTurunButton(key) {
-  const btn = document.querySelector(`[data-info-turun="${key}"]`);
-  if (!btn) return;
-
-  // Kalau udah diterima lab, tombol disabled
-  if (mixerDiterimaLab[key]) {
-    btn.textContent = 'Diterima Lab';
-    btn.disabled = true;
-    btn.classList.add('btn-info-turun-sent');
-    btn.style.opacity = '0.5';
-    btn.style.cursor = 'not-allowed';
-    return;
-  }
-
-  // Kalau udah QC OK, tombol disabled juga
-  if (mixerQcApproved[key]) {
-    btn.textContent = 'Sudah OK';
-    btn.disabled = true;
-    btn.classList.add('btn-info-turun-sent');
-    btn.style.opacity = '0.5';
-    btn.style.cursor = 'not-allowed';
-    return;
-  }
-
-  btn.disabled = false;
-  btn.style.opacity = '1';
-  btn.style.cursor = 'pointer';
-
-  if (mixerInfoTurun[key]) {
-    btn.textContent = 'Info Ulang';
-    btn.classList.add('btn-info-turun-sent');
-  } else {
-    btn.textContent = 'Campuran Turun';
-    btn.classList.remove('btn-info-turun-sent');
-  }
-}
-
-// ===== DISCARD =====
-function handleDiscard(lineKey, mixerName) {
-  const key = `${lineKey}-${mixerName}`;
-  const activeId = mixerActiveBatchLog[key];
-  const batchLog = activeId ? batchLogCache[activeId] : null;
-
-  if (!activeId || !batchLog || !batchLog.jamTuangMikro) {
-    showActionModal('Discharge', `${mixerName} belum ada Penuangan Mikro untuk batch ini. Lakukan Penuangan Mikro dulu.`);
-    return;
-  }
-
-  if (!batchLog.jamSampling) {
-    showActionModal('Discharge', `${mixerName} belum di-sampling. Lakukan Sampling dulu sebelum Discharge.`);
-    return;
-  }
-
-  if (!mixerQcApproved[key]) {
-    showActionModal('Discharge', `${mixerName} belum di-OK oleh QC. Tunggu QC konfirmasi dulu sebelum Discharge.`);
-    return;
-  }
-
-  
-
-  const now = new Date();
-  const jam = formatJam(now);
-  const newBatchNumber = (batchLog.batchNumber || 0) + 1;
-
-  db.collection('batchLog').doc(activeId).update({
-    jamDiscard: jam,
-    discarded: true,
-  }).then(() => {
-    return mixerDocRef(key).set({
-      status: 'idle',
-      batchNumberToday: newBatchNumber,
-      alertType: firebase.firestore.FieldValue.delete(),
-      activeBatchLogId: firebase.firestore.FieldValue.delete(),
-      qcApproved: false,
-      needsResample: false,
-      infoTurunRequested: false,
-      diterimaLab: false,
-    }, { merge: true });
-  }).then(() => {
-    showOperatorToast(`✅ ${mixerName} sudah discharge. Batch naik ke ${newBatchNumber}.`);
-  }).catch((err) => {
-    console.error('Gagal discard:', err);
-    showOperatorToast(`❌ Gagal discharge ${mixerName}. Coba lagi.`);
-  });
-}
-
-function setLineTitle(lineKey) {
-  const title = document.getElementById('lineTitle');
-  if (title) title.textContent = LINES[lineKey].name;
-}
-
-// ===== riwayat batch =====
-
-let shiftStartAt = null;
-const batchLogCache = {};
-
+// ===== NOTE & BADGE =====
 function getMixerNote(key) {
   const activeId = mixerActiveBatchLog[key];
   const batchLog = activeId ? batchLogCache[activeId] : null;
   const role = getRole();
+  const mixerName = key.split('-').slice(1).join('-');
+  const isTuangMixer = TUANG_MIKRO_MIXERS.includes(mixerName);
 
   if (!activeId) return '-';
 
@@ -676,9 +821,13 @@ function getMixerNote(key) {
     if (mixerInfoTurun[key]) return 'Campuran turun ke lab';
   }
 
-  if (sudahQcOk) return 'Tuang ✓ · Sampling ✓ · QC ✓';
+  if (sudahQcOk) {
+    if (isTuangMixer) return 'Tuang ✓ · Sampling ✓ · QC ✓';
+    return 'Sampling ✓ · QC ✓';
+  }
   if (sudahTuang && sudahSampling) return 'Tuang ✓ · Sampling ✓';
   if (sudahTuang) return 'Tuang ✓ · belum Sampling';
+  if (sudahSampling) return 'Sampling ✓';
   return '-';
 }
 
@@ -688,19 +837,12 @@ function refreshMixerNote(key) {
   const note = getMixerNote(key);
   el.textContent = note;
 
-  if (note.includes('diterima lab')) {
-    el.style.color = '#16a34a';
-  } else if (note.includes('turun')) {
-    el.style.color = '#0ea5e9';
-  } else if (note.includes('QC ✓')) {
-    el.style.color = '#16a34a';
-  } else if (note.includes('Sampling ✓')) {
-    el.style.color = '#0ea5e9';
-  } else if (note.includes('Tuang ✓')) {
-    el.style.color = '#f59e0b';
-  } else {
-    el.style.color = '#64748b';
-  }
+  if (note.includes('diterima lab')) el.style.color = '#16a34a';
+  else if (note.includes('turun')) el.style.color = '#0ea5e9';
+  else if (note.includes('QC ✓')) el.style.color = '#16a34a';
+  else if (note.includes('Sampling ✓')) el.style.color = '#0ea5e9';
+  else if (note.includes('Tuang ✓')) el.style.color = '#f59e0b';
+  else el.style.color = '#64748b';
 }
 
 function refreshMixerBadge(key) {
@@ -719,30 +861,45 @@ function refreshMixerBadge(key) {
   }
 }
 
+// ===== TABEL DATA BATCH =====
 function renderBatchLogRows() {
   const tbody = document.getElementById('rekapBody');
-  const rows = Object.values(batchLogCache)
-    .filter((r) => !shiftStartAt || r.createdAt >= shiftStartAt)
-    .filter((r) => !!r.jamDiscard)
-    .sort((a, b) => a.createdAt - b.createdAt);
+  if (!tbody) return;
 
-  if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center empty-note">Belum ada data batch</td></tr>';
+  const lineKey = getLineParam();
+  const mixerOrder = LINES[lineKey] ? LINES[lineKey].mixers : [];
+
+  const html = [];
+
+  mixerOrder.forEach((mixerName) => {
+    const mixerBatches = Object.values(batchLogCache)
+      .filter((r) => r.mixerName === mixerName)
+      .filter((r) => !!r.jamDiscard)
+      .filter((r) => !shiftStartAt || r.createdAt >= shiftStartAt)
+      .sort((a, b) => b.createdAt - a.createdAt);
+
+    const r = mixerBatches[0];
+
+    if (!r) return;
+
+    html.push(`
+      <tr>
+        <td>${r.batchNumber}</td>
+        <td>${r.mixerName}</td>
+        <td>${r.jamTuangMikro || '-'}</td>
+        <td>${r.jamSampling || '-'}</td>
+        <td>${r.jamQcOk || '-'}</td>
+        <td>${r.jamDiscard || '-'}</td>
+      </tr>
+    `);
+  });
+
+  if (html.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center empty-note">Belum ada data batch</td></tr>';
     return;
   }
 
-  tbody.innerHTML = rows.map((r) => `
-    <tr>
-      <td>${r.mixerName}</td>
-      <td>${r.tanggal || '-'}</td>
-      <td>${r.jamTuangMikro || '-'}</td>
-      <td>${r.jamSampling || '-'}</td>
-      <td>${r.jamQcOk || '-'}</td>
-      <td>${r.jamDiscard || '-'}</td>
-      <td>${r.batchNumber}</td>
-      <td>${r.shift || '-'}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = html.join('');
 }
 
 function subscribeBatchLog(lineKey) {
@@ -763,6 +920,8 @@ function subscribeBatchLog(lineKey) {
     LINES[lineKey].mixers.forEach((mixerName) => {
       refreshMixerNote(`${lineKey}-${mixerName}`);
     });
+
+    updateActionButtonsState();
   }, (err) => console.error('Gagal dengerin batchLog:', err));
 }
 
@@ -774,8 +933,14 @@ function subscribeLineMeta(lineKey) {
   }, (err) => console.error('Gagal dengerin lineMeta:', err));
 }
 
+function setLineTitle(lineKey) {
+  const title = document.getElementById('lineTitle');
+  if (title) title.textContent = LINES[lineKey].name;
+}
+
+// ===== RESET =====
 function resetShift() {
-  const confirmed = confirm('Yakin  reset batch? Nomor batch berjalan balik ke awal. Riwayat batch sebelumnya tetap ter simpan');
+  const confirmed = confirm('Yakin reset batch? Nomor batch berjalan balik ke awal. Riwayat batch sebelumnya tetap tersimpan.');
   if (!confirmed) return;
 
   const lineKey = getLineParam();
@@ -804,27 +969,7 @@ function resetShift() {
   batch.commit().catch((err) => console.error('Gagal reset shift:', err));
 }
 
-function downloadSpreadsheet() {
-  const table = document.querySelector('.rekap-table');
-  const rows = table.querySelectorAll('tbody tr');
-  const isEmpty = rows.length === 1 && rows[0].querySelector('.empty-note');
-
-  if (isEmpty) {
-    showOperatorToast('Belum ada data batch buat di-unduh.');
-    return;
-  }
-
-  const workbook = XLSX.utils.table_to_book(table, { sheet: 'Rekap Batch', raw: true });
-  const sheet = workbook.Sheets['Rekap Batch'];
-  sheet['!cols'] = [
-    { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 8 },
-  ];
-
-  const lineKey = getLineParam();
-  const fileName = `rekap-batch-${LINES[lineKey].name.replace(/[^a-z0-9]+/gi, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  XLSX.writeFile(workbook, fileName);
-}
-
+// ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
   const actionModalEl = document.getElementById('actionModal');
   actionModalEl.addEventListener('hide.bs.modal', () => {
@@ -845,4 +990,9 @@ document.addEventListener('DOMContentLoaded', () => {
   subscribeToLine(lineKey);
   subscribeBatchLog(lineKey);
   subscribeLineMeta(lineKey);
+
+  // Chat cuma buat operator
+  if (getRole() === 'operator') {
+    initChat('operator', lineKey);
+  }
 });

@@ -35,75 +35,80 @@
     </div>
   </div>
 
-  <!-- TOOLBAR BULK -->
-  <div class="panel-card mb-4">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <div>
-        <span id="selectedCount" class="form-label-sm">0 mixer dipilih</span>
-      </div>
-      <div class="d-flex gap-2">
-        <button type="button" class="btn-mini btn-ok" onclick="handleBulkOk()">OK yang Dipilih</button>
-        <button type="button" class="btn-mini btn-ulang" onclick="handleBulkUlang()">Ulang yang Dipilih</button>
-        <button type="button" class="btn-mini btn-sampling" onclick="clearAllSelection()">Batal Pilih</button>
+  <div class="row g-3">
+
+    <!-- KIRI: CARD MIXER -->
+    <div class="col-12 col-md-7 col-lg-8">
+      <div class="panel-card">
+        <h2 class="panel-title">Mixer</h2>
+        <div class="row g-2" id="allMixerGrid"></div>
       </div>
     </div>
-  </div>
 
-  <!-- STATUS REAL-TIME -->
-  <div class="panel-card mb-4">
-    <h2 class="panel-title">Status mixer sekarang</h2>
-    <div id="allMixerGrid"></div>
-  </div>
+    <!-- KANAN: AKSI + FILTER + EXCEL + CHAT -->
+    <div class="col-12 col-md-5 col-lg-4">
 
-  <!-- RIWAYAT + FILTER -->
-  <div class="panel-card">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-      <h2 class="panel-title mb-0">Riwayat batch</h2>
-      <div>
-        <label class="form-label-sm">Produk</label>
-        <select id="produkFilter" class="form-select form-select-sm">
-          <option value="">Semua</option>
-          <option value="A">Mocca</option>
-          <option value="A-MF">Moccafrio</option>
-          <option value="B">Cappu</option>
-        </select>
+      <!-- AKSI -->
+      <div class="panel-card mb-3">
+        <h2 class="panel-title">Aksi</h2>
+        <div id="actionButtons" class="action-buttons"></div>
       </div>
-      <div>
-        <label class="form-label-sm">Shift</label>
-        <select id="shiftFilter" class="form-select form-select-sm">
-          <option value="">Semua</option>
-          <option value="1">Shift 1</option>
-          <option value="2">Shift 2</option>
-          <option value="3">Shift 3</option>
-        </select>
+
+      <!-- FILTER (HORIZONTAL) -->
+      <div class="panel-card mb-3">
+        <h2 class="panel-title">Filter Data</h2>
+        <div class="filter-row">
+          <div class="filter-item">
+            <label class="form-label-sm">Tanggal</label>
+            <input type="date" id="dateFilter" class="form-control form-control-sm field-dark">
+          </div>
+          <div class="filter-item">
+            <label class="form-label-sm">Produk</label>
+            <select id="produkFilter" class="form-select form-select-sm field-dark">
+              <option value="">Semua</option>
+              <option value="A">Mocca</option>
+              <option value="A-MF">Moccafrio</option>
+              <option value="B">Cappu</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label class="form-label-sm">Shift</label>
+            <select id="shiftFilter" class="form-select form-select-sm field-dark">
+              <option value="">Semua</option>
+              <option value="1">Shift 1</option>
+              <option value="2">Shift 2</option>
+              <option value="3">Shift 3</option>
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="d-flex align-items-center gap-2">
-        <input type="date" id="dateFilter" class="form-control form-control-sm field-dark" style="width:auto">
-        <button type="button" class="btn-print" onclick="downloadLabQcSpreadsheet()">Download (Excel)</button>
+
+      <!-- DOWNLOAD -->
+      <div class="panel-card mb-3">
+        <button type="button" class="btn-print w-100" onclick="downloadLabQcSpreadsheet()">Download (Excel)</button>
       </div>
+
+      <!-- CHAT -->
+      <div class="panel-card">
+        <h2 class="panel-title">Chat Operator</h2>
+        <div class="chat-tabs">
+          <button type="button" class="chat-tab active" id="chatTabA">Line A</button>
+          <button type="button" class="chat-tab" id="chatTabB">Line B</button>
+        </div>
+        <div class="chat-container">
+          <div class="chat-messages" id="chatMessages">
+            <p class="chat-empty">Belum ada chat hari ini.</p>
+          </div>
+          <div class="chat-input-wrap">
+            <input type="text" id="chatInput" class="chat-input" placeholder="Ketik pesan..." maxlength="200">
+            <button type="button" id="chatSendBtn" class="chat-send-btn">Kirim</button>
+          </div>
+        </div>
+      </div>
+
     </div>
-    <div class="table-responsive rekap-scroll">
-      <table class="table table-sm rekap-table mb-0">
-        <thead>
-          <tr>
-            <th>Line</th>
-            <th>Mixer</th>
-            <th>Tanggal</th>
-            <th>Shift</th>
-            <th>Jam Tuang Mikro</th>
-            <th>Jam Sampling</th>
-            <th>Jam QC OK</th>
-            <th>Jam Discharge</th>
-            <th>Batch</th>
-          </tr>
-        </thead>
-        <tbody id="labQcRekapBody">
-          <tr><td colspan="9" class="text-center empty-note">Belum ada data</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 
+  </div>
 </div>
 
 <template id="mixerIconTpl">
@@ -131,6 +136,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="../assets/js/firebase-config.js"></script>
+<script src="../assets/js/chat.js"></script>
 <script src="../assets/js/lab-qc.js"></script>
 </body>
 </html>

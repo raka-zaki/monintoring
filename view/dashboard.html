@@ -10,17 +10,18 @@
 </head>
 <body>
 
-<!-- Overlay pilih role, cuma muncul kalo device ini belum pernah milih -->
+<!-- Overlay pilih role -->
 <div id="roleOverlay" class="role-overlay d-none">
   <div class="role-box">
     <h2 class="role-title">Pilih Role</h2>
     <p class="role-subtitle">Pilih peran Anda di sistem ini.</p>
     <div class="d-flex flex-column gap-2 mt-3">
-      <button type="button" class="btn-role" onclick="setRole('operator')"> Operator Mixing</button>
-      <button type="button" class="btn-role" onclick="setRole('qc')"> Helper QC</button>
+      <button type="button" class="btn-role" onclick="setRole('operator')">Operator Mixing</button>
+      <button type="button" class="btn-role" onclick="setRole('qc')">Helper QC</button>
     </div>
   </div>
 </div>
+
 <div id="operatorPinOverlay" class="role-overlay d-none">
   <div class="role-box">
     <h2 class="role-title">Masukin Sandi</h2>
@@ -31,8 +32,7 @@
     <p id="operatorPinError" class="form-error mt-2 d-none">Sandi salah, coba lagi.</p>
   </div>
 </div>
-<!-- ===== TAMBAHAN: SHIFT ===== -->
-<!-- Overlay pilih shift, muncul setelah role dipilih -->
+
 <div id="shiftOverlay" class="role-overlay d-none">
   <div class="role-box">
     <h2 class="role-title">Pilih Shift</h2>
@@ -44,7 +44,6 @@
     </div>
   </div>
 </div>
-<!-- ===== /TAMBAHAN: SHIFT ===== -->
 
 <div class="dash-wrap">
 
@@ -58,56 +57,65 @@
     </div>
     <div class="d-flex align-items-center gap-2">
       <span class="role-badge" id="roleBadge">-</span>
-      <!-- ===== TAMBAHAN: SHIFT ===== -->
       <span class="role-badge" id="shiftBadge">-</span>
-      <!-- ===== /TAMBAHAN: SHIFT ===== -->
       <button type="button" class="back-link" onclick="changeRole()">Ganti role</button>
-      <!-- ===== TAMBAHAN: SHIFT ===== -->
       <button type="button" class="back-link" onclick="changeShift()">Ganti shift</button>
-      <!-- ===== /TAMBAHAN: SHIFT ===== -->
       <div class="clock-badge" id="clockBadge">--:--:--</div>
       <button type="button" class="btn-reset-shift" onclick="resetShift()">Reset Batch</button>
     </div>
   </div>
 
-  <div class="row g-4">
+  <div class="row g-3">
 
-    <div class="col-lg-9">
-      <div class="row g-3" id="mixerGrid">
-        <!-- mixer cards di-generate lewat JS -->
+    <!-- KIRI: CARD MIXER + TOMBOL ACTION -->
+    <div class="col-12 col-lg-8">
+      <div class="panel-card mb-3">
+        <h2 class="panel-title">Mixer</h2>
+        <div class="row g-2" id="mixerGrid"></div>
+      </div>
+
+      <div class="panel-card">
+        <div id="actionButtons" class="action-buttons"></div>
       </div>
     </div>
 
-    <div class="col-lg-3">
-      <div class="d-flex flex-column h-100 gap-3">
-        <div class="panel-card flex-grow-1">
-          <h2 class="panel-title">Data batch</h2>
-          <div class="table-responsive rekap-scroll">
-            <table class="table table-sm rekap-table mb-0">
-              <thead>
-                <tr>
-                  <th>Mixer</th>
-                  <th>Tanggal</th>
-                  <th>Jam Sampling</th>
-                  <th>Jam Tuang Mikro</th>
-                  <th>Jam QC OK</th>
-                  <th>Jam Discharge</th>
-                  <th>Batch</th>
-                  <!-- ===== TAMBAHAN: SHIFT ===== -->
-                  <th>Shift</th>
-                  <!-- ===== /TAMBAHAN: SHIFT ===== -->
-                </tr>
-              </thead>
-              <tbody id="rekapBody">
-                <tr>
-                  <!-- ===== TAMBAHAN: SHIFT (colspan 5 -> 6) ===== -->
-                  <td colspan="6" class="text-center empty-note">Belum ada data batch</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+    <!-- KANAN: DATA BATCH -->
+   <div class="col-12 col-lg-4">
+  <div class="panel-card mb-3">
+    <h2 class="panel-title">Data Batch</h2>
+    <div class="table-responsive rekap-scroll">
+      <table class="table table-sm rekap-table mb-0">
+        <thead>
+          <tr>
+            <th>Batch</th>
+            <th>Mixer</th>
+            <th>Tuang</th>
+            <th>Samp</th>
+            <th>QC</th>
+            <th>Disc</th>
+          </tr>
+        </thead>
+        <tbody id="rekapBody">
+          <tr><td colspan="6" class="text-center empty-note">Belum ada data batch</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CHAT (cuma muncul buat operator) -->
+  <div class="panel-card d-none" id="chatPanel">
+    <h2 class="panel-title">Chat Lab QC</h2>
+    <div class="chat-container">
+      <div class="chat-messages" id="chatMessages">
+        <p class="chat-empty">Belum ada chat hari ini.</p>
       </div>
+      <div class="chat-input-wrap">
+        <input type="text" id="chatInput" class="chat-input" placeholder="Ketik pesan..." maxlength="200">
+        <button type="button" id="chatSendBtn" class="chat-send-btn">Kirim</button>
+      </div>
+    </div>
+  </div>
+</div>
     </div>
 
   </div>
@@ -124,7 +132,8 @@
 </template>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- Popup buat aksi Sampling & Tuang Mikro, isinya diisi dinamis lewat JS -->
+
+<!-- Modal aksi -->
 <div class="modal fade" id="actionModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content action-modal-content">
@@ -141,7 +150,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Notifikasi buat Operator pas QC udah nyelesein aksinya -->
 <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 2100;">
   <div id="opToast" class="toast op-toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
     <div class="d-flex">
@@ -151,10 +159,10 @@
   </div>
 </div>
 
-<!-- Firebase: app-nya dulu, baru firestore, baru config kita, baru app.js -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="../assets/js/firebase-config.js"></script>
+<script src="../assets/js/chat.js"></script>
 <script src="../assets/js/app.js"></script>
 </body>
 </html>
