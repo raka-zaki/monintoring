@@ -3,12 +3,14 @@ const LINES = {
   B: { name: 'Cappucino', short: 'Cappu', mixers: ['MC 01', 'MC 02', 'MC 03', 'MPC 01', 'MPC 02'] },
 };
 
-const MIXER_LABEL_OVERRIDE = {
-  'A-MF': 'Moccafrio',
-};
-
+const MIXER_LABEL_OVERRIDE = { 'A-MF': 'Moccafrio' };
 const SPV_PIN = '1234';
 
+const allBatchLogCache = {};
+let realtimeUnsubscribe = null;
+let isRealtimeMode = true;
+
+// ===== PIN =====
 function checkPin() {
   const input = document.getElementById('pinInput').value.trim();
   const errEl = document.getElementById('pinError');
@@ -50,7 +52,6 @@ function showSpvToast(message) {
 }
 
 // ===== status real-time semua mixer =====
-
 function renderAllMixerGrid() {
   const wrap = document.getElementById('allMixerGrid');
   const iconTpl = document.getElementById('mixerIconTpl').innerHTML;
@@ -109,6 +110,8 @@ function subscribeAllMixers() {
             noteText = qcApproved ? 'Tuang ✓ · Sampling ✓ · QC ✓' : 'Tuang ✓ · Sampling ✓';
           } else if (sudahTuang) {
             noteText = 'Tuang ✓ · Nunggu Sampling';
+          } else if (sudahSampling) {
+            noteText = 'Sampling ✓';
           }
         }
       }
@@ -138,10 +141,65 @@ function subscribeAllMixers() {
   }, (err) => console.error('Gagal dengerin status mixer:', err));
 }
 
-// ===== riwayat batch gabungan =====
+// ===== SUBSCRIBE REAL-TIME (limit 200) =====
+function subscribeAllBatchLog() {
+  if (realtimeUnsubscribe) {
+    realtimeUnsubscribe();
+    realtimeUnsubscribe = null;
+  }
 
-const allBatchLogCache = {};
+  realtimeUnsubscribe = db.collection('batchLog')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot((snapshot) => {
+      if (!isRealtimeMode) return;
 
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'removed') {
+          delete allBatchLogCache[change.doc.id];
+          return;
+        }
+        const data = change.doc.data();
+        allBatchLogCache[change.doc.id] = {
+          ...data,
+          _id: change.doc.id,
+          createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
+        };
+      });
+      renderSpvRekap();
+    }, (err) => console.error('Gagal dengerin batchLog:', err));
+}
+
+// ===== FETCH BY DATE (histori) =====
+async function fetchBatchByDate(isoDate) {
+  if (!isoDate) return {};
+
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const dateStr = new Date(y, m - 1, d).toLocaleDateString('id-ID', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+
+  try {
+    const snapshot = await db.collection('batchLog')
+      .where('tanggal', '==', dateStr)
+      .get();
+
+    const data = {};
+    snapshot.docs.forEach((doc) => {
+      data[doc.id] = {
+        ...doc.data(),
+        _id: doc.id,
+        createdAt: doc.data().createdAt ? doc.data().createdAt.toDate() : new Date(),
+      };
+    });
+    return data;
+  } catch (err) {
+    console.error('Gagal fetch by date:', err);
+    return {};
+  }
+}
+
+// ===== RIWAYAT + FILTER =====
 function isSameDate(date, isoDateStr) {
   if (!isoDateStr) return true;
   const [y, m, d] = isoDateStr.split('-').map(Number);
@@ -158,15 +216,9 @@ function getMixerOrder(lineKey) {
 
 function matchProdukFilter(row, produkFilter) {
   if (!produkFilter) return true;
-  if (produkFilter === 'A') {
-    return row.line === 'A' && row.mixerName !== 'MF';
-  }
-  if (produkFilter === 'A-MF') {
-    return row.line === 'A' && row.mixerName === 'MF';
-  }
-  if (produkFilter === 'B') {
-    return row.line === 'B';
-  }
+  if (produkFilter === 'A') return row.line === 'A' && row.mixerName !== 'MF';
+  if (produkFilter === 'A-MF') return row.line === 'A' && row.mixerName === 'MF';
+  if (produkFilter === 'B') return row.line === 'B';
   return true;
 }
 
@@ -266,75 +318,153 @@ function renderSpvRekap() {
   tbody.innerHTML = html.join('');
 }
 
-function subscribeAllBatchLog() {
-  db.collection('batchLog').onSnapshot((snapshot) => {
-    snapshot.docChanges().forEach((change) => {
-      if (change.type === 'removed') {
-        delete allBatchLogCache[change.doc.id];
-        return;
-      }
-      const data = change.doc.data();
-      allBatchLogCache[change.doc.id] = {
-        ...data,
-        _id: change.doc.id,
-        createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
-      };
-    });
-    renderSpvRekap();
-  }, (err) => console.error('Gagal dengerin batchLog:', err));
-}
-
-function downloadSpvSpreadsheet() {
+// ===== DOWNLOAD EXCEL (cuma hari itu, warna per mixer) =====
+async function downloadSpvSpreadsheet() {
   const selectedDate = document.getElementById('dateFilter').value;
-  const filtered = getFilteredRows();
 
-  if (filtered.length === 0) {
-    showSpvToast('Belum ada data untuk filter ini.');
+  if (!selectedDate) {
+    showSpvToast('Pilih tanggal dulu.');
     return;
   }
 
-  const rows = [];
-  Object.keys(LINES).forEach((lineKey) => {
-    const lineInfo = LINES[lineKey];
-    getMixerOrder(lineKey).forEach((mixerName) => {
-      filtered
-        .filter((r) => r.line === lineKey && r.mixerName === mixerName)
-        .sort(sortByBatchNumber)
-        .forEach((r) => {
-          rows.push([
-            lineInfo.name,
-            r.mixerName,
-            r.tanggal || '-',
-            r.shift ? 'Shift ' + r.shift : '-',
-            r.jamTuangMikro || '-',
-            r.jamSampling || '-',
-            r.jamQcOk || '-',
-            r.jamDiscard || '-',
-            r.batchNumber,
-          ]);
-        });
-    });
+  const [y, m, d] = selectedDate.split('-').map(Number);
+  const dateStr = new Date(y, m - 1, d).toLocaleDateString('id-ID', {
+    day: '2-digit', month: 'short', year: 'numeric',
   });
 
-  const header = ['Produk', 'Mixer', 'Tanggal', 'Shift', 'Jam Tuang Mikro', 'Jam Sampling', 'Jam QC OK', 'Jam Discharge', 'Batch'];
-  const aoa = [header, ...rows];
+  try {
+    const snapshot = await db.collection('batchLog')
+      .where('tanggal', '==', dateStr)
+      .get();
 
-  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
-  worksheet['!cols'] = [
-    { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 8 },
-  ];
+    if (snapshot.empty) {
+      showSpvToast('Belum ada data buat tanggal ini.');
+      return;
+    }
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap SPV');
+    const data = snapshot.docs.map((doc) => ({ ...doc.data(), _id: doc.id }));
 
-const tanggalFormatted = selectedDate
-  ? new Date(selectedDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-  : 'semua tanggal';
-XLSX.writeFile(workbook, `Data Riwayat Batch - ${tanggalFormatted}.xlsx`);
+    const produkFilter = document.getElementById('produkFilter').value;
+    const shiftFilter = document.getElementById('shiftFilter').value;
+
+    const filtered = data.filter((r) => {
+      if (produkFilter === 'A' && !(r.line === 'A' && r.mixerName !== 'MF')) return false;
+      if (produkFilter === 'A-MF' && !(r.line === 'A' && r.mixerName === 'MF')) return false;
+      if (produkFilter === 'B' && r.line !== 'B') return false;
+      if (shiftFilter && String(r.shift) !== String(shiftFilter)) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      showSpvToast('Belum ada data buat filter ini.');
+      return;
+    }
+
+    const rows = [];
+    Object.keys(LINES).forEach((lineKey) => {
+      const lineInfo = LINES[lineKey];
+      getMixerOrder(lineKey).forEach((mixerName) => {
+        filtered
+          .filter((r) => r.line === lineKey && r.mixerName === mixerName)
+          .sort(sortByBatchNumber)
+          .forEach((r) => {
+            rows.push([
+              lineInfo.name,
+              r.mixerName,
+              r.tanggal || '-',
+              r.shift ? 'Shift ' + r.shift : '-',
+              r.jamTuangMikro || '-',
+              r.jamSampling || '-',
+              r.jamQcOk || '-',
+              r.jamDiscard || '-',
+              r.batchNumber,
+            ]);
+          });
+      });
+    });
+
+    const header = ['Produk', 'Mixer', 'Tanggal', 'Shift', 'Jam Tuang Mikro', 'Jam Sampling', 'Jam QC OK', 'Jam Discharge', 'Batch'];
+    const aoa = [header, ...rows];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+    worksheet['!cols'] = [
+      { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 10 },
+      { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 8 },
+    ];
+
+    // ===== WARNA PER MIXER =====
+    const MIXER_COLORS = {
+      'MD 01':  'D6E4F0', // biru muda
+      'MD 02':  'D6F0D6', // hijau muda
+      'ME 03':  'FFF2CC', // kuning muda
+      'ME 04':  'FCE4D6', // oranye muda
+      'MPD':    'E4D6F0', // ungu muda
+      'MPE':    'D6F0F0', // cyan muda
+      'MF':     'F0D6E4', // pink muda
+      'MC 01':  'F0E4D6', // coklat muda
+      'MC 02':  'D6F0E4', // hijau tosca
+      'MC 03':  'E0E0F0', // lavender
+      'MPC 01': 'F0E0D6', // peach
+      'MPC 02': 'F0D6D6', // salmon
+    };
+
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+
+    // Header style
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cell = worksheet[XLSX.utils.encode_cell({ r: 0, c: C })];
+      if (!cell) continue;
+      cell.s = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '5C4433' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: {
+          top: { style: 'thin', color: { rgb: '3B2A20' } },
+          bottom: { style: 'thin', color: { rgb: '3B2A20' } },
+          left: { style: 'thin', color: { rgb: '3B2A20' } },
+          right: { style: 'thin', color: { rgb: '3B2A20' } },
+        },
+      };
+    }
+
+    // Data rows — warna per mixer
+    for (let R = range.s.r + 1; R <= range.e.r; R++) {
+      const mixerCell = worksheet[XLSX.utils.encode_cell({ r: R, c: 1 })];
+      if (!mixerCell) continue;
+
+      const fillColor = MIXER_COLORS[mixerCell.v] || 'FFFFFF';
+
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cell = worksheet[XLSX.utils.encode_cell({ r: R, c: C })];
+        if (!cell) continue;
+
+        cell.s = {
+          fill: { fgColor: { rgb: fillColor } },
+          alignment: { vertical: 'center' },
+          border: {
+            top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            right: { style: 'thin', color: { rgb: 'CCCCCC' } },
+          },
+        };
+      }
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap SPV');
+
+    const tanggalFormatted = new Date(selectedDate).toLocaleDateString('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    });
+    XLSX.writeFile(workbook, `Data Riwayat Batch - ${tanggalFormatted}.xlsx`);
+  } catch (err) {
+    console.error('Gagal download:', err);
+    showSpvToast('❌ Gagal download. Coba lagi.');
+  }
 }
 
 // ===== EDIT BATCH =====
-
 let editBatchTargetId = null;
 
 function openEditBatchModal(batchLogId) {
@@ -386,12 +516,34 @@ function confirmEditBatch() {
   });
 }
 
-// ===== init =====
-
+// ===== INIT =====
 function initSpvPage() {
   const dateInput = document.getElementById('dateFilter');
-  dateInput.value = new Date().toISOString().slice(0, 10);
-  dateInput.addEventListener('change', renderSpvRekap);
+  const today = new Date().toISOString().slice(0, 10);
+  dateInput.value = today;
+
+  dateInput.addEventListener('change', async () => {
+    const isoDate = dateInput.value;
+
+    if (isoDate === today) {
+      // Balik ke mode real-time
+      isRealtimeMode = true;
+      Object.keys(allBatchLogCache).forEach((k) => delete allBatchLogCache[k]);
+      subscribeAllBatchLog();
+    } else {
+      // Mode histori
+      isRealtimeMode = false;
+      if (realtimeUnsubscribe) {
+        realtimeUnsubscribe();
+        realtimeUnsubscribe = null;
+      }
+
+      const data = await fetchBatchByDate(isoDate);
+      Object.keys(allBatchLogCache).forEach((k) => delete allBatchLogCache[k]);
+      Object.assign(allBatchLogCache, data);
+      renderSpvRekap();
+    }
+  });
 
   document.getElementById('produkFilter').addEventListener('change', renderSpvRekap);
   document.getElementById('shiftFilter').addEventListener('change', renderSpvRekap);
