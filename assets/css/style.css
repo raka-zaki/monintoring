@@ -967,3 +967,78 @@ body::before {
     flex: 1 1 calc(50% - 0.2rem);
   }
 }
+
+/* ===== LAB QC — Data Batch di kolom kanan ===== */
+.rekap-scroll {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.rekap-table {
+  font-size: 0.65rem;
+}
+
+.rekap-table thead th {
+  font-size: 0.6rem;
+  padding: 0.3rem 0.2rem;
+}
+
+.rekap-table tbody td {
+  padding: 0.3rem 0.2rem;
+}
+
+/* ===== CHAT — dikecilin ===== */
+.chat-messages {
+  min-height: 80px;
+  max-height: 120px;
+  padding: 0.4rem;
+  gap: 0.3rem;
+}
+
+.chat-msg {
+  font-size: 0.7rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.chat-input {
+  font-size: 0.7rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.chat-send-btn {
+  font-size: 0.65rem;
+  padding: 0.3rem 0.6rem;
+}
+
+/* ===== FILTER — horizontal ===== */
+.filter-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+}
+
+.filter-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-item .form-label-sm {
+  font-size: 0.6rem;
+  margin-bottom: 0.15rem;
+}
+
+.filter-item .form-control-sm,
+.filter-item .form-select-sm {
+  font-size: 0.65rem;
+  padding: 0.25rem 0.4rem;
+}
+
+/* ===== TOMBOL ACTION LAB QC ===== */
+.btn-action-terima { background: #0ea5e9; }
+.btn-action-terima:hover:not(:disabled) { background: #0284c7; }
+
+.btn-action-ok { background: #16a34a; }
+.btn-action-ok:hover:not(:disabled) { background: #15803d; }
+
+.btn-action-ulang { background: #dc2626; }
+.btn-action-ulang:hover:not(:disabled) { background: #b91c1c; }
