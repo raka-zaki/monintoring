@@ -263,7 +263,6 @@ function updateActionButtonsState() {
   const role = getRole();
   if (role !== 'operator') return;
 
-  // Cek apakah ada mixer yang bisa tuang mikro
   const canTuang = Array.from(selectedMixers).some((key) => {
     const mixerName = key.split('-').slice(1).join('-');
     if (!TUANG_MIKRO_MIXERS.includes(mixerName)) return false;
@@ -427,18 +426,18 @@ function handleBulkAction(actionType) {
     }
   });
 
- if (valid.length === 0) {
-  const firstReason = invalid.length > 0 ? invalid[0].reason : 'tidak valid';
-  const labelMap = {
-    'sampling': 'sampling',
-    'tuang-mikro': 'tuang mikro',
-    'discharge': 'discharge',
-    'info-turun': 'menurunkan campuran',
-  };
-  const label = labelMap[actionType] || actionType;
-  showOperatorToast(`❌ Tidak bisa ${label}: ${firstReason}`);
-  return;
-}
+  if (valid.length === 0) {
+    const firstReason = invalid.length > 0 ? invalid[0].reason : 'tidak valid';
+    const labelMap = {
+      'sampling': 'sampling',
+      'tuang-mikro': 'tuang mikro',
+      'discharge': 'discharge',
+      'info-turun': 'menurunkan campuran',
+    };
+    const label = labelMap[actionType] || actionType;
+    showOperatorToast(`❌ Tidak bisa ${label}: ${firstReason}`);
+    return;
+  }
 
   executeBulkAction(actionType, valid);
 }
@@ -465,11 +464,9 @@ function validateBulkAction(key, mixerName, actionType) {
     if (!isTuangMixer) return { valid: false, reason: 'tidak butuh tuang mikro' };
     if (mixerStatus[key] === 'menunggu') return { valid: false, reason: 'lagi nunggu konfirmasi' };
 
-    // ===== FIX: kalau masih ada batch jalan → block =====
     if (activeId) {
       return { valid: false, reason: 'masih ada batch jalan, discharge dulu' };
     }
-    // ===== /FIX =====
 
     return { valid: true };
   }
@@ -630,7 +627,6 @@ function processNextAlert() {
         const activeId = mixerActiveBatchLog[key];
         const batchLog = activeId ? batchLogCache[activeId] : null;
 
-        // Kalau masih ada batch jalan → block
         if (activeId && batchLog) {
           showOperatorToast(`⚠️ ${mixerName} masih ada batch jalan. Discharge dulu.`);
           mixerDocRef(key).set({
@@ -871,7 +867,7 @@ function refreshMixerBadge(key) {
   }
 }
 
-// ===== TABEL DATA BATCH =====
+// ===== TABEL DATA BATCH (1 batch terakhir per mixer) =====
 function renderBatchLogRows() {
   const tbody = document.getElementById('rekapBody');
   if (!tbody) return;

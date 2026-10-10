@@ -12,6 +12,9 @@ const selectedMixers = new Set();
 
 const lastKnownInfoTurun = {};
 
+// ===== Shift start (buat detect reset dari operator) =====
+let labQcShiftStartAt = null;
+
 // ===== PIN =====
 function checkPin() {
   const input = document.getElementById('pinInput').value.trim();
@@ -441,139 +444,206 @@ function getFilteredRows() {
     .filter((r) => matchShiftFilter(r, s));
 }
 
-// ===== RENDER TABEL DATA BATCH (di kolom kanan) =====
+// ===== RENDER TABEL DATA BATCH (1 batch terakhir per mixer, hormatin reset) =====
 function renderLabQcRekap() {
   const tbody = document.getElementById('labQcRekapBody');
-  const filtered = getFilteredRows()
-    .sort((a, b) => b.createdAt - a.createdAt);
+  if (!tbody) return;
 
-  if (filtered.length === 0) {
+  const produkFilter = document.getElementById('produkFilter').value;
+
+  const linesToShow = produkFilter === 'A-MF'
+    ? [{ lineKey: 'A', mixerOnly: 'MF' }]
+    : produkFilter === 'A'
+      ? [{ lineKey: 'A', mixerOnly: null, exclude: ['MF'] }]
+      : produkFilter === 'B'
+        ? [{ lineKey: 'B', mixerOnly: null }]
+        : [
+            { lineKey: 'A', mixerOnly: null },
+            { lineKey: 'B', mixerOnly: null },
+          ];
+
+  const html = [];
+
+  linesToShow.forEach(({ lineKey, mixerOnly, exclude }) => {
+    let mixerOrder = getMixerOrder(lineKey);
+
+    if (mixerOnly) mixerOrder = mixerOrder.filter((m) => m === mixerOnly);
+    if (exclude) mixerOrder = mixerOrder.filter((m) => !exclude.includes(m));
+
+    mixerOrder.forEach((mixerName) => {
+      const mixerBatches = Object.values(allBatchLogCache)
+        .filter((r) => r.line === lineKey && r.mixerName === mixerName)
+        .filter((r) => !!r.jamDiscard)
+        // Hormatin reset dari operator
+        .filter((r) => !labQcShiftStartAt || r.createdAt >= labQcShiftStartAt)
+        .sort((a, b) => b.createdAt - a.createdAt);
+
+      const r = mixerBatches[0];
+      if (!r) return;
+
+      html.push(`
+        <tr>
+          <td>${r.batchNumber}</td>
+          <td>${r.mixerName}</td>
+          <td>${r.jamTuangMikro || '-'}</td>
+          <td>${r.jamSampling || '-'}</td>
+          <td>${r.jamQcOk || '-'}</td>
+          <td>${r.jamDiscard || '-'}</td>
+        </tr>
+      `);
+    });
+  });
+
+  if (html.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="text-center empty-note">Belum ada data</td></tr>';
     return;
   }
 
-  tbody.innerHTML = filtered.map((r) => `
-    <tr>
-      <td>${r.batchNumber}</td>
-      <td>${r.mixerName}</td>
-      <td>${r.jamTuangMikro || '-'}</td>
-      <td>${r.jamSampling || '-'}</td>
-      <td>${r.jamQcOk || '-'}</td>
-      <td>${r.jamDiscard || '-'}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = html.join('');
 }
 
-// ===== DOWNLOAD EXCEL (warna per mixer) =====
-function downloadLabQcSpreadsheet() {
+// ===== DOWNLOAD EXCEL (format sama kayak SPV) =====
+async function downloadLabQcSpreadsheet() {
   const selectedDate = document.getElementById('dateFilter').value;
-  const filtered = getFilteredRows();
 
-  if (filtered.length === 0) {
-    showLabToast('Belum ada data buat filter ini.');
+  if (!selectedDate) {
+    showLabToast('Pilih tanggal dulu.');
     return;
   }
 
-  // Urut: Line → Mixer → Batch
-  const rows = [];
-  Object.keys(LINES).forEach((lineKey) => {
-    getMixerOrder(lineKey).forEach((mixerName) => {
-      filtered
-        .filter((r) => r.line === lineKey && r.mixerName === mixerName)
-        .sort(sortByBatchNumber)
-        .forEach((r) => {
-          rows.push([
-            r.batchNumber,
-            r.mixerName,
-            r.jamTuangMikro || '-',
-            r.jamSampling || '-',
-            r.jamQcOk || '-',
-            r.jamDiscard || '-',
-          ]);
-        });
-    });
+  const [y, m, d] = selectedDate.split('-').map(Number);
+  const dateStr = new Date(y, m - 1, d).toLocaleDateString('id-ID', {
+    day: '2-digit', month: 'short', year: 'numeric',
   });
 
-  const header = ['Batch', 'Mixer', 'Tuang', 'Samp', 'QC', 'Disc'];
-  const aoa = [header, ...rows];
+  try {
+    const snapshot = await db.collection('batchLog')
+      .where('tanggal', '==', dateStr)
+      .get();
 
-  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
-  worksheet['!cols'] = [
-    { wch: 8 },   // Batch
-    { wch: 12 },  // Mixer
-    { wch: 10 },  // Tuang
-    { wch: 10 },  // Samp
-    { wch: 10 },  // QC
-    { wch: 10 },  // Disc
-  ];
+    if (snapshot.empty) {
+      showLabToast('Belum ada data buat tanggal ini.');
+      return;
+    }
 
-  // ===== WARNA PER MIXER =====
-  const MIXER_COLORS = {
-    'MD 01':  'D6E4F0',
-    'MD 02':  'D6F0D6',
-    'ME 03':  'FFF2CC',
-    'ME 04':  'FCE4D6',
-    'MPD':    'E4D6F0',
-    'MPE':    'D6F0F0',
-    'MF':     'F0D6E4',
-    'MB 02':   'FFD9B3',
-    'MC 01':  'F0E4D6',
-    'MC 02':  'D6F0E4',
-    'MC 03':  'E0E0F0',
-    'MPC 01': 'F0E0D6',
-    'MPC 02': 'F0D6D6',
-  };
+    const data = snapshot.docs.map((doc) => ({ ...doc.data(), _id: doc.id }));
 
-  const range = XLSX.utils.decode_range(worksheet['!ref']);
+    const produkFilter = document.getElementById('produkFilter').value;
+    const shiftFilter = document.getElementById('shiftFilter').value;
 
-  // Header style
-  for (let C = range.s.c; C <= range.e.c; C++) {
-    const cell = worksheet[XLSX.utils.encode_cell({ r: 0, c: C })];
-    if (!cell) continue;
-    cell.s = {
-      font: { bold: true, color: { rgb: 'FFFFFF' } },
-      fill: { fgColor: { rgb: '5C4433' } },
-      alignment: { horizontal: 'center', vertical: 'center' },
-      border: {
-        top: { style: 'thin', color: { rgb: '3B2A20' } },
-        bottom: { style: 'thin', color: { rgb: '3B2A20' } },
-        left: { style: 'thin', color: { rgb: '3B2A20' } },
-        right: { style: 'thin', color: { rgb: '3B2A20' } },
-      },
+    const filtered = data.filter((r) => {
+      if (produkFilter === 'A' && !(r.line === 'A' && r.mixerName !== 'MF')) return false;
+      if (produkFilter === 'A-MF' && !(r.line === 'A' && r.mixerName === 'MF')) return false;
+      if (produkFilter === 'B' && r.line !== 'B') return false;
+      if (shiftFilter && String(r.shift) !== String(shiftFilter)) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      showLabToast('Belum ada data buat filter ini.');
+      return;
+    }
+
+    const rows = [];
+    Object.keys(LINES).forEach((lineKey) => {
+      const lineInfo = LINES[lineKey];
+      getMixerOrder(lineKey).forEach((mixerName) => {
+        filtered
+          .filter((r) => r.line === lineKey && r.mixerName === mixerName)
+          .sort(sortByBatchNumber)
+          .forEach((r) => {
+            rows.push([
+              lineInfo.name,
+              r.mixerName,
+              r.tanggal || '-',
+              r.shift ? 'Shift ' + r.shift : '-',
+              r.jamTuangMikro || '-',
+              r.jamSampling || '-',
+              r.jamQcOk || '-',
+              r.jamDiscard || '-',
+              r.batchNumber,
+            ]);
+          });
+      });
+    });
+
+    const header = ['Produk', 'Mixer', 'Tanggal', 'Shift', 'Jam Tuang Mikro', 'Jam Sampling', 'Jam QC OK', 'Jam Discharge', 'Batch'];
+    const aoa = [header, ...rows];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+    worksheet['!cols'] = [
+      { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 10 },
+      { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 8 },
+    ];
+
+    const MIXER_COLORS = {
+      'MD 01':  'D6E4F0',
+      'MD 02':  'D6F0D6',
+      'ME 03':  'FFF2CC',
+      'ME 04':  'FCE4D6',
+      'MPD':    'E4D6F0',
+      'MPE':    'D6F0F0',
+      'MF':     'F0D6E4',
+      'MB 02':   'FFD9B3',
+      'MC 01':  'F0E4D6',
+      'MC 02':  'D6F0E4',
+      'MC 03':  'E0E0F0',
+      'MPC 01': 'F0E0D6',
+      'MPC 02': 'F0D6D6',
     };
-  }
 
-  // Data rows — warna per mixer
-  for (let R = range.s.r + 1; R <= range.e.r; R++) {
-    const mixerCell = worksheet[XLSX.utils.encode_cell({ r: R, c: 1 })];
-    if (!mixerCell) continue;
-
-    const fillColor = MIXER_COLORS[mixerCell.v] || 'FFFFFF';
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
 
     for (let C = range.s.c; C <= range.e.c; C++) {
-      const cell = worksheet[XLSX.utils.encode_cell({ r: R, c: C })];
+      const cell = worksheet[XLSX.utils.encode_cell({ r: 0, c: C })];
       if (!cell) continue;
-
       cell.s = {
-        fill: { fgColor: { rgb: fillColor } },
-        alignment: { vertical: 'center' },
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '5C4433' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
         border: {
-          top: { style: 'thin', color: { rgb: 'CCCCCC' } },
-          bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
-          left: { style: 'thin', color: { rgb: 'CCCCCC' } },
-          right: { style: 'thin', color: { rgb: 'CCCCCC' } },
+          top: { style: 'thin', color: { rgb: '3B2A20' } },
+          bottom: { style: 'thin', color: { rgb: '3B2A20' } },
+          left: { style: 'thin', color: { rgb: '3B2A20' } },
+          right: { style: 'thin', color: { rgb: '3B2A20' } },
         },
       };
     }
+
+    for (let R = range.s.r + 1; R <= range.e.r; R++) {
+      const mixerCell = worksheet[XLSX.utils.encode_cell({ r: R, c: 1 })];
+      if (!mixerCell) continue;
+
+      const fillColor = MIXER_COLORS[mixerCell.v] || 'FFFFFF';
+
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cell = worksheet[XLSX.utils.encode_cell({ r: R, c: C })];
+        if (!cell) continue;
+
+        cell.s = {
+          fill: { fgColor: { rgb: fillColor } },
+          alignment: { vertical: 'center' },
+          border: {
+            top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            right: { style: 'thin', color: { rgb: 'CCCCCC' } },
+          },
+        };
+      }
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Lab QC');
+
+    const tanggalFormatted = new Date(selectedDate).toLocaleDateString('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    });
+    XLSX.writeFile(workbook, `Data Riwayat Batch Lab QC - ${tanggalFormatted}.xlsx`);
+  } catch (err) {
+    console.error('Gagal download:', err);
+    showLabToast('❌ Gagal download. Coba lagi.');
   }
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Lab QC');
-
-  const tanggalFormatted = selectedDate
-    ? new Date(selectedDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-    : 'semua-tanggal';
-  XLSX.writeFile(workbook, `Data Riwayat Batch Lab QC - ${tanggalFormatted}.xlsx`);
 }
 
 // ===== subscribe =====
@@ -624,11 +694,30 @@ function subscribeAllBatchLog() {
   }, (err) => console.error('Gagal dengerin batchLog:', err));
 }
 
+// ===== SUBSCRIBE LINE META (detect reset dari operator) =====
+function subscribeAllLineMeta() {
+  db.collection('lineMeta').onSnapshot((snapshot) => {
+    let latestShiftStart = null;
+
+    snapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      if (data.shiftStartAt) {
+        const t = data.shiftStartAt.toDate();
+        if (!latestShiftStart || t > latestShiftStart) {
+          latestShiftStart = t;
+        }
+      }
+    });
+
+    labQcShiftStartAt = latestShiftStart;
+    renderLabQcRekap();
+  }, (err) => console.error('Gagal dengerin lineMeta:', err));
+}
+
 function initLabQcPage() {
   const dateInput = document.getElementById('dateFilter');
   dateInput.value = new Date().toISOString().slice(0, 10);
 
-  // Event listener filter
   dateInput.addEventListener('change', renderLabQcRekap);
   document.getElementById('produkFilter').addEventListener('change', renderLabQcRekap);
   document.getElementById('shiftFilter').addEventListener('change', renderLabQcRekap);
@@ -638,6 +727,7 @@ function initLabQcPage() {
   startClock();
   subscribeAllMixers();
   subscribeAllBatchLog();
+  subscribeAllLineMeta();
 
   initChat('lab-qc');
 }
