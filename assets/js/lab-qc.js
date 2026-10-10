@@ -1,6 +1,6 @@
 const LINES = {
   A: { name: 'Moccacino & Moccafrio', short: 'Mocca', mixers: ['MD 01', 'MD 02', 'ME 03', 'ME 04', 'MPD', 'MPE', 'MF'] },
-  B: { name: 'Cappucino', short: 'Cappu', mixers: ['MC 01', 'MC 02', 'MC 03', 'MPC 01', 'MPC 02'] },
+  B: { name: 'Cappucino', short: 'Cappu', mixers: ['MB 02','MC 01', 'MC 02', 'MC 03', 'MPC 01', 'MPC 02'] },
 };
 
 const MIXER_LABEL_OVERRIDE = { 'A-MF': 'Moccafrio' };
@@ -516,6 +516,7 @@ function downloadLabQcSpreadsheet() {
     'MPD':    'E4D6F0',
     'MPE':    'D6F0F0',
     'MF':     'F0D6E4',
+    'MB 02':   'FFD9B3',
     'MC 01':  'F0E4D6',
     'MC 02':  'D6F0E4',
     'MC 03':  'E0E0F0',

@@ -1,6 +1,6 @@
 const LINES = {
   A: { name: 'Moccacino & Moccafrio', mixers: ['MD 01', 'MD 02', 'ME 03', 'ME 04', 'MPD', 'MPE', 'MF'] },
-  B: { name: 'Cappucino', mixers: ['MC 01', 'MC 02', 'MC 03', 'MPC 01', 'MPC 02'] },
+  B: { name: 'Cappucino', mixers: ['MB 02','MC 01', 'MC 02', 'MC 03', 'MPC 01', 'MPC 02'] },
 };
 
 const TUANG_MIKRO_MIXERS = ['MPD', 'MPE', 'MF', 'MPC 01', 'MPC 02'];
@@ -65,6 +65,16 @@ function applyRoleUI() {
   const role = getRole();
   const badge = document.getElementById('roleBadge');
   if (badge) badge.textContent = role === 'qc' ? 'Helper QC' : (role === 'operator' ? 'Operator' : '-');
+
+  // ===== Reset Batch cuma buat Operator =====
+  const resetBtn = document.getElementById('resetShiftBtn');
+  if (resetBtn) {
+    if (role === 'operator') {
+      resetBtn.classList.remove('d-none');
+    } else {
+      resetBtn.classList.add('d-none');
+    }
+  }
 
   const grid = document.getElementById('mixerGrid');
   if (grid && grid.children.length > 0) {
